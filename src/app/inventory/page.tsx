@@ -1,3 +1,5 @@
+import { InventoryPageClient } from "@/components/stockhome/inventory-page";
+
 export default function InventoryPage() {
-  return <main className="p-6">Inventory</main>;
+  return <InventoryPageClient />;
 }

@@ -1,3 +1,5 @@
+import { SettingsPageClient } from "@/components/stockhome/settings-page";
+
 export default function SettingsPage() {
-  return <main className="p-6">Settings</main>;
+  return <SettingsPageClient />;
 }
