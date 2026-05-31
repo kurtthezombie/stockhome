@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { AppShell } from "@/components/stockhome/app-shell";
@@ -72,21 +73,25 @@ export function Dashboard() {
         label: "Pending tasks",
         value: tasks.filter((task) => !task.is_done).length,
         detail: "Tasks still open",
+        href: "/tasks",
       },
       {
         label: "Low stock",
         value: items.filter((item) => item.status === "low_stock").length,
         detail: "Items to restock soon",
+        href: "/inventory",
       },
       {
         label: "Unavailable",
         value: items.filter((item) => item.status === "unavailable").length,
         detail: "Items currently missing",
+        href: "/inventory",
       },
       {
         label: "Expiring soon",
         value: items.filter((item) => isExpiringSoon(item.expiry_date)).length,
         detail: "Within the next 7 days",
+        href: "/inventory",
       },
     ],
     [items, tasks],
@@ -106,21 +111,22 @@ export function Dashboard() {
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {summaries.map((summary) => (
-            <Card key={summary.label}>
-              <CardHeader>
-                <CardDescription>{summary.label}</CardDescription>
-                <CardTitle className="text-3xl">{summary.value}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground">
-                  {isLoading ? "Loading..." : summary.detail}
-                </p>
-              </CardContent>
-            </Card>
+            <Link key={summary.label} href={summary.href}>
+              <Card className="h-full transition-colors hover:bg-muted/50">
+                <CardHeader>
+                  <CardDescription>{summary.label}</CardDescription>
+                  <CardTitle className="text-3xl">{summary.value}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-xs text-muted-foreground">
+                    {isLoading ? "Loading..." : summary.detail}
+                  </p>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       </div>
     </AppShell>
   );
 }
-

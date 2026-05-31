@@ -1,11 +1,21 @@
 "use client";
 
+import {
+  Add01Icon,
+  ArrowDown01Icon,
+  ArrowUp01Icon,
+  Delete02Icon,
+  Edit02Icon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import type { User } from "@supabase/supabase-js";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { AppShell } from "@/components/stockhome/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -23,15 +33,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import type { InventoryItem, InventoryStatus } from "@/types";
 
@@ -40,16 +43,20 @@ type InventoryForm = {
   status: InventoryStatus;
   quantity: string;
   unit: string;
+  has_expiry_date: boolean;
   expiry_date: string;
   category: string;
   notes: string;
 };
+
+type InventoryFilter = InventoryStatus;
 
 const emptyForm: InventoryForm = {
   name: "",
   status: "available",
   quantity: "",
   unit: "",
+  has_expiry_date: false,
   expiry_date: "",
   category: "",
   notes: "",
@@ -60,6 +67,17 @@ const statusLabels: Record<InventoryStatus, string> = {
   low_stock: "Low stock",
   unavailable: "Unavailable",
 };
+
+const categoryOptions = [
+  "Food & cooking",
+  "Drinks",
+  "Cleaning & laundry",
+  "Bathroom & personal care",
+  "Paper & disposables",
+  "Medicine",
+  "Tools & maintenance",
+  "Other",
+];
 
 function statusVariant(status: InventoryStatus) {
   if (status === "unavailable") {
@@ -89,15 +107,79 @@ function isExpiringSoon(date: string | null) {
   return diffDays >= 0 && diffDays <= 7;
 }
 
+function itemCardClassName(item: InventoryItem, expiringSoon: boolean) {
+  if (expiringSoon) {
+    return "bg-destructive/5 ring-destructive/20";
+  }
+
+  if (item.status === "unavailable") {
+    return "bg-destructive/5 ring-destructive/20";
+  }
+
+  if (item.status === "low_stock") {
+    return "bg-amber-50 ring-amber-200";
+  }
+
+  return "bg-background";
+}
+
+function statusFilterClassName(status: InventoryFilter, isSelected: boolean) {
+  if (!isSelected) {
+    return "";
+  }
+
+  if (status === "available") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100";
+  }
+
+  if (status === "low_stock") {
+    return "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100";
+  }
+
+  return "border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/15";
+}
+
 export function InventoryPageClient() {
   const [user, setUser] = useState<User | null>(null);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [form, setForm] = useState<InventoryForm>(emptyForm);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null);
+  const [statusFilters, setStatusFilters] = useState<InventoryFilter[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const categoryFilters = useMemo(() => ["All", ...categoryOptions], []);
+
+  const filteredItems = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    return items.filter((item) => {
+      const matchesStatus =
+        statusFilters.length === 0 || statusFilters.includes(item.status);
+      const matchesCategory =
+        categoryFilter === "All" || item.category === categoryFilter;
+      const matchesName =
+        !normalizedQuery || item.name.toLowerCase().includes(normalizedQuery);
+
+      return matchesStatus && matchesCategory && matchesName;
+    });
+  }, [categoryFilter, items, searchQuery, statusFilters]);
+
+  function toggleStatusFilter(status: InventoryFilter) {
+    setStatusFilters((currentFilters) =>
+      currentFilters.includes(status)
+        ? currentFilters.filter((currentStatus) => currentStatus !== status)
+        : [...currentFilters, status],
+    );
+  }
 
   async function loadItems() {
     setIsLoading(true);
@@ -148,6 +230,7 @@ export function InventoryPageClient() {
       status: item.status,
       quantity: item.quantity?.toString() ?? "",
       unit: item.unit ?? "",
+      has_expiry_date: Boolean(item.expiry_date),
       expiry_date: item.expiry_date ?? "",
       category: item.category ?? "",
       notes: item.notes ?? "",
@@ -172,7 +255,7 @@ export function InventoryPageClient() {
       status: form.status,
       quantity: form.quantity ? Number(form.quantity) : null,
       unit: form.unit.trim() || null,
-      expiry_date: form.expiry_date || null,
+      expiry_date: form.has_expiry_date ? form.expiry_date || null : null,
       category: form.category.trim() || null,
       notes: form.notes.trim() || null,
     };
@@ -200,11 +283,25 @@ export function InventoryPageClient() {
     await loadItems();
   }
 
-  async function deleteItem(item: InventoryItem) {
+  function openDeleteDialog(item: InventoryItem) {
+    setItemToDelete(item);
+    setError(null);
+    setIsDeleteDialogOpen(true);
+  }
+
+  async function deleteItem() {
+    if (!itemToDelete) {
+      return;
+    }
+
+    setIsDeleting(true);
+
     const { error: deleteError } = await supabase
       .from("inventory_items")
       .delete()
-      .eq("id", item.id);
+      .eq("id", itemToDelete.id);
+
+    setIsDeleting(false);
 
     if (deleteError) {
       setError(deleteError.message);
@@ -212,8 +309,13 @@ export function InventoryPageClient() {
     }
 
     setItems((currentItems) =>
-      currentItems.filter((currentItem) => currentItem.id !== item.id),
+      currentItems.filter((currentItem) => currentItem.id !== itemToDelete.id),
     );
+    setExpandedItemId((currentId) =>
+      currentId === itemToDelete.id ? null : currentId,
+    );
+    setItemToDelete(null);
+    setIsDeleteDialogOpen(false);
   }
 
   return (
@@ -228,89 +330,203 @@ export function InventoryPageClient() {
               Track household stock, availability, and expiry dates.
             </p>
           </div>
-          <Button onClick={openAddDialog}>Add item</Button>
+          <Button className="h-10 px-4 text-sm" onClick={openAddDialog}>
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+            Add item
+          </Button>
         </div>
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-        <div className="rounded-lg bg-background ring-1 ring-foreground/10">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Quantity</TableHead>
-                <TableHead>Expiry</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Notes</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((item) => {
-                const expiringSoon = isExpiringSoon(item.expiry_date);
+        <Input
+          value={searchQuery}
+          placeholder="Search items"
+          onChange={(event) => setSearchQuery(event.target.value)}
+          className="h-10 max-w-md"
+        />
 
-                return (
-                  <TableRow
-                    key={item.id}
-                    className={expiringSoon ? "bg-destructive/5" : undefined}
-                  >
-                    <TableCell className="min-w-40 font-medium">
-                      {item.name}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={statusVariant(item.status)}>
-                        {statusLabels[item.status]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {item.quantity ?? "-"} {item.unit ?? ""}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span>{item.expiry_date ?? "-"}</span>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          {[
+            { label: "Available", value: "available" },
+            { label: "Low stock", value: "low_stock" },
+            { label: "Unavailable", value: "unavailable" },
+          ].map((filterOption) => {
+            const status = filterOption.value as InventoryFilter;
+            const isSelected = statusFilters.includes(status);
+
+            return (
+              <Button
+                key={filterOption.value}
+                variant="outline"
+                className={cn(
+                  "h-9 px-3",
+                  statusFilterClassName(status, isSelected),
+                )}
+                onClick={() => toggleStatusFilter(status)}
+              >
+                {filterOption.label}
+              </Button>
+            );
+          })}
+        </div>
+
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+          {categoryFilters.map((category) => (
+            <Button
+              key={category}
+              variant={categoryFilter === category ? "secondary" : "outline"}
+              size="sm"
+              className="h-9 shrink-0 px-3"
+              onClick={() => setCategoryFilter(category)}
+            >
+              {category}
+            </Button>
+          ))}
+        </div>
+
+        <div className="-mt-3 flex flex-wrap gap-x-2.5 gap-y-0.5 text-[0.625rem] leading-4 text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <span className="size-1.5 rounded-full border bg-background" />
+            Available
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="size-1.5 rounded-full bg-amber-200 ring-1 ring-amber-300" />
+            Low stock
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="size-1.5 rounded-full bg-destructive/30 ring-1 ring-destructive/30" />
+            Needs attention
+          </span>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          {filteredItems.map((item) => {
+            const expiringSoon = isExpiringSoon(item.expiry_date);
+            const isExpanded = expandedItemId === item.id;
+
+            return (
+              <Card
+                key={item.id}
+                size="sm"
+                className={cn(itemCardClassName(item, expiringSoon))}
+              >
+                <CardContent className="grid gap-3">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 text-left"
+                      onClick={() =>
+                        setExpandedItemId(isExpanded ? null : item.id)
+                      }
+                      aria-expanded={isExpanded}
+                    >
+                      <span className="block truncate text-sm font-semibold">
+                        {item.name}
+                      </span>
+                      <span className="mt-1 flex flex-wrap gap-2">
+                        <Badge variant={statusVariant(item.status)}>
+                          {statusLabels[item.status]}
+                        </Badge>
                         {expiringSoon ? (
-                          <Badge variant="destructive">Soon</Badge>
+                          <Badge variant="destructive">Expiring soon</Badge>
                         ) : null}
+                      </span>
+                    </button>
+                    <div className="flex shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon-lg"
+                        onClick={() =>
+                          setExpandedItemId(isExpanded ? null : item.id)
+                        }
+                        aria-label={
+                          isExpanded
+                            ? `Collapse ${item.name}`
+                            : `Expand ${item.name}`
+                        }
+                        title={isExpanded ? "Collapse" : "Expand"}
+                      >
+                        <HugeiconsIcon
+                          icon={isExpanded ? ArrowUp01Icon : ArrowDown01Icon}
+                          strokeWidth={2}
+                        />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {isExpanded ? (
+                    <div className="grid gap-3 border-t pt-3 text-sm">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            Quantity
+                          </p>
+                          <p className="font-medium">
+                            {item.quantity ?? "-"} {item.unit ?? ""}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            Expiry
+                          </p>
+                          <p className="font-medium">
+                            {item.expiry_date ?? "-"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            Category
+                          </p>
+                          <p className="font-medium">{item.category ?? "-"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            Status
+                          </p>
+                          <p className="font-medium">
+                            {statusLabels[item.status]}
+                          </p>
+                        </div>
                       </div>
-                    </TableCell>
-                    <TableCell>{item.category ?? "-"}</TableCell>
-                    <TableCell className="max-w-72 truncate">
-                      {item.notes ?? "-"}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-2">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Notes</p>
+                        <p className="mt-1 whitespace-pre-wrap">
+                          {item.notes ?? "-"}
+                        </p>
+                      </div>
+                      <div className="flex justify-end gap-2 border-t pt-3">
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon-lg"
                           onClick={() => openEditDialog(item)}
+                          aria-label={`Edit ${item.name}`}
+                          title="Edit"
                         >
-                          Edit
+                          <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
                         </Button>
                         <Button
                           variant="destructive"
-                          size="sm"
-                          onClick={() => deleteItem(item)}
+                          size="icon-lg"
+                          onClick={() => openDeleteDialog(item)}
+                          aria-label={`Delete ${item.name}`}
+                          title="Delete"
                         >
-                          Delete
+                          <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
                         </Button>
                       </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-              {!isLoading && items.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={7}
-                    className="py-8 text-center text-muted-foreground"
-                  >
-                    No inventory items yet.
-                  </TableCell>
-                </TableRow>
-              ) : null}
-            </TableBody>
-          </Table>
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            );
+          })}
+          {!isLoading && filteredItems.length === 0 ? (
+            <Card className="bg-background md:col-span-2">
+              <CardContent className="py-8 text-center text-muted-foreground">
+                No inventory items in this view.
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading inventory...</p>
@@ -333,6 +549,7 @@ export function InventoryPageClient() {
               <Input
                 id="item-name"
                 value={form.name}
+                placeholder="Soy sauce"
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
@@ -372,6 +589,7 @@ export function InventoryPageClient() {
                   min="0"
                   step="0.01"
                   value={form.quantity}
+                  placeholder="1"
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
@@ -385,6 +603,7 @@ export function InventoryPageClient() {
                 <Input
                   id="item-unit"
                   value={form.unit}
+                  placeholder="bottle, kg, roll"
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
@@ -395,32 +614,60 @@ export function InventoryPageClient() {
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label htmlFor="item-expiry-date">Expiry date</Label>
-                <Input
-                  id="item-expiry-date"
-                  type="date"
-                  value={form.expiry_date}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      expiry_date: event.target.value,
-                    }))
-                  }
-                />
+              <div className="grid gap-3">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="item-has-expiry-date"
+                    checked={form.has_expiry_date}
+                    onCheckedChange={(checked) =>
+                      setForm((current) => ({
+                        ...current,
+                        has_expiry_date: checked === true,
+                        expiry_date: checked === true ? current.expiry_date : "",
+                      }))
+                    }
+                  />
+                  <Label htmlFor="item-has-expiry-date">Has expiry date</Label>
+                </div>
+                {form.has_expiry_date ? (
+                  <div className="grid gap-2">
+                    <Label htmlFor="item-expiry-date">Expiry date</Label>
+                    <Input
+                      id="item-expiry-date"
+                      type="date"
+                      value={form.expiry_date}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          expiry_date: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                ) : null}
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="item-category">Category</Label>
-                <Input
-                  id="item-category"
+                <Label>Category</Label>
+                <Select
                   value={form.category}
-                  onChange={(event) =>
+                  onValueChange={(value) =>
                     setForm((current) => ({
                       ...current,
-                      category: event.target.value,
+                      category: value,
                     }))
                   }
-                />
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categoryOptions.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="grid gap-2">
@@ -428,6 +675,7 @@ export function InventoryPageClient() {
               <Textarea
                 id="item-notes"
                 value={form.notes}
+                placeholder="Brand, storage location, or reminder"
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
@@ -451,7 +699,34 @@ export function InventoryPageClient() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete item?</DialogTitle>
+            <DialogDescription>
+              This will permanently remove {itemToDelete?.name ?? "this item"}.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={deleteItem}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }
-
