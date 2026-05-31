@@ -49,6 +49,8 @@ type InventoryForm = {
   notes: string;
 };
 
+type InventoryFormErrors = Partial<Record<keyof InventoryForm, string>>;
+
 type InventoryFilter = InventoryStatus;
 
 type InventoryPageClientProps = {
@@ -146,6 +148,55 @@ function statusFilterClassName(status: InventoryFilter, isSelected: boolean) {
   return "border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/15";
 }
 
+function validateInventoryForm(form: InventoryForm) {
+  const errors: InventoryFormErrors = {};
+  const trimmedName = form.name.trim();
+  const trimmedQuantity = form.quantity.trim();
+  const trimmedUnit = form.unit.trim();
+
+  if (!trimmedName) {
+    errors.name = "Enter an item name.";
+  } else if (trimmedName.length > 80) {
+    errors.name = "Keep the item name under 80 characters.";
+  }
+
+  if (!trimmedQuantity) {
+    errors.quantity = "Enter a quantity.";
+  } else {
+    const quantity = Number(trimmedQuantity);
+
+    if (Number.isNaN(quantity)) {
+      errors.quantity = "Quantity must be a number.";
+    } else if (quantity < 0) {
+      errors.quantity = "Quantity cannot be negative.";
+    }
+  }
+
+  if (trimmedUnit && !trimmedQuantity) {
+    errors.quantity = "Add a quantity when using a unit.";
+  }
+
+  if (trimmedQuantity && !trimmedUnit) {
+    errors.unit = "Add a unit, like bottle, kg, or roll.";
+  } else if (trimmedUnit.length > 30) {
+    errors.unit = "Keep the unit under 30 characters.";
+  }
+
+  if (form.has_expiry_date && !form.expiry_date) {
+    errors.expiry_date = "Choose an expiry date or turn this off.";
+  }
+
+  if (!form.category) {
+    errors.category = "Choose a category.";
+  }
+
+  if (form.notes.length > 300) {
+    errors.notes = "Keep notes under 300 characters.";
+  }
+
+  return errors;
+}
+
 export function InventoryPageClient({
   title = "Inventory",
   description = "Track household stock, availability, and expiry dates.",
@@ -172,6 +223,7 @@ export function InventoryPageClient({
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [formErrors, setFormErrors] = useState<InventoryFormErrors>({});
 
   const categoryFilters = useMemo(() => ["All", ...categoryOptions], []);
 
@@ -237,6 +289,7 @@ export function InventoryPageClient({
   function openAddDialog() {
     setEditingItem(null);
     setForm(emptyForm);
+    setFormErrors({});
     setError(null);
     setIsDialogOpen(true);
   }
@@ -253,12 +306,20 @@ export function InventoryPageClient({
       category: item.category ?? "",
       notes: item.notes ?? "",
     });
+    setFormErrors({});
     setError(null);
     setIsDialogOpen(true);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    const nextErrors = validateInventoryForm(form);
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFormErrors(nextErrors);
+      return;
+    }
 
     if (!user) {
       setError("You must be logged in to save inventory items.");
@@ -267,11 +328,12 @@ export function InventoryPageClient({
 
     setIsSaving(true);
     setError(null);
+    setFormErrors({});
 
     const payload = {
       name: form.name.trim(),
       status: form.status,
-      quantity: form.quantity ? Number(form.quantity) : null,
+      quantity: Number(form.quantity.trim()),
       unit: form.unit.trim() || null,
       expiry_date: form.has_expiry_date ? form.expiry_date || null : null,
       category: form.category.trim() || null,
@@ -572,21 +634,24 @@ export function InventoryPageClient({
               Use status to keep restock decisions obvious.
             </DialogDescription>
           </DialogHeader>
-          <form className="grid gap-4" onSubmit={handleSubmit}>
+          <form className="grid gap-4" onSubmit={handleSubmit} noValidate>
             <div className="grid gap-2">
               <Label htmlFor="item-name">Name</Label>
               <Input
                 id="item-name"
                 value={form.name}
                 placeholder="Soy sauce"
+                aria-invalid={Boolean(formErrors.name)}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
                     name: event.target.value,
                   }))
                 }
-                required
               />
+              {formErrors.name ? (
+                <p className="text-xs text-destructive">{formErrors.name}</p>
+              ) : null}
             </div>
             <div className="grid gap-2">
               <Label>Status</Label>
@@ -618,7 +683,7 @@ export function InventoryPageClient({
                   min="0"
                   step="0.01"
                   value={form.quantity}
-                  placeholder="1"
+                  aria-invalid={Boolean(formErrors.quantity)}
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
@@ -626,6 +691,11 @@ export function InventoryPageClient({
                     }))
                   }
                 />
+                {formErrors.quantity ? (
+                  <p className="text-xs text-destructive">
+                    {formErrors.quantity}
+                  </p>
+                ) : null}
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="item-unit">Unit</Label>
@@ -633,6 +703,7 @@ export function InventoryPageClient({
                   id="item-unit"
                   value={form.unit}
                   placeholder="bottle, kg, roll"
+                  aria-invalid={Boolean(formErrors.unit)}
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
@@ -640,6 +711,9 @@ export function InventoryPageClient({
                     }))
                   }
                 />
+                {formErrors.unit ? (
+                  <p className="text-xs text-destructive">{formErrors.unit}</p>
+                ) : null}
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -665,6 +739,7 @@ export function InventoryPageClient({
                       id="item-expiry-date"
                       type="date"
                       value={form.expiry_date}
+                      aria-invalid={Boolean(formErrors.expiry_date)}
                       onChange={(event) =>
                         setForm((current) => ({
                           ...current,
@@ -672,6 +747,11 @@ export function InventoryPageClient({
                         }))
                       }
                     />
+                    {formErrors.expiry_date ? (
+                      <p className="text-xs text-destructive">
+                        {formErrors.expiry_date}
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -697,6 +777,11 @@ export function InventoryPageClient({
                     ))}
                   </SelectContent>
                 </Select>
+                {formErrors.category ? (
+                  <p className="text-xs text-destructive">
+                    {formErrors.category}
+                  </p>
+                ) : null}
               </div>
             </div>
             <div className="grid gap-2">
@@ -705,6 +790,7 @@ export function InventoryPageClient({
                 id="item-notes"
                 value={form.notes}
                 placeholder="Brand, storage location, or reminder"
+                aria-invalid={Boolean(formErrors.notes)}
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
@@ -712,6 +798,9 @@ export function InventoryPageClient({
                   }))
                 }
               />
+              {formErrors.notes ? (
+                <p className="text-xs text-destructive">{formErrors.notes}</p>
+              ) : null}
             </div>
             <DialogFooter>
               <Button
