@@ -23,6 +23,7 @@ const navItems = [
   { href: "/", label: "Dashboard" },
   { href: "/tasks", label: "Tasks" },
   { href: "/inventory", label: "Inventory" },
+  { href: "/inventory/restock", label: "Restock" },
   { href: "/settings", label: "Settings" },
 ];
 
@@ -104,7 +105,7 @@ export function AppShell({ children }: AppShellProps) {
               <Button
                 key={item.href}
                 asChild
-                variant={pathname === item.href ? "secondary" : "ghost"}
+                  variant={pathname === item.href ? "secondary" : "ghost"}
                 size="sm"
               >
                 <Link href={item.href}>{item.label}</Link>

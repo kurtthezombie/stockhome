@@ -39,6 +39,70 @@ const emptyForm: TaskForm = {
   notes: "",
 };
 
+function getTaskDueState(task: Task) {
+  if (task.is_done || !task.due_date) {
+    return null;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const dueDate = new Date(`${task.due_date}T00:00:00`);
+  const diffDays = Math.ceil(
+    (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  if (diffDays < 0) {
+    return "overdue";
+  }
+
+  if (diffDays === 0) {
+    return "today";
+  }
+
+  if (diffDays <= 3) {
+    return "soon";
+  }
+
+  return null;
+}
+
+function taskCardClassName(task: Task) {
+  const dueState = getTaskDueState(task);
+
+  if (task.is_done) {
+    return "bg-muted/70 text-muted-foreground";
+  }
+
+  if (dueState === "overdue") {
+    return "bg-destructive/5 ring-destructive/20";
+  }
+
+  if (dueState === "today" || dueState === "soon") {
+    return "bg-amber-50 ring-amber-200";
+  }
+
+  return "bg-background";
+}
+
+function taskDueBadge(task: Task) {
+  const dueState = getTaskDueState(task);
+
+  if (dueState === "overdue") {
+    return <Badge variant="destructive">Overdue</Badge>;
+  }
+
+  if (dueState === "today") {
+    return <Badge variant="outline">Due today</Badge>;
+  }
+
+  if (dueState === "soon") {
+    return <Badge variant="outline">Due soon</Badge>;
+  }
+
+  return null;
+}
+
 export function TasksPageClient() {
   const [user, setUser] = useState<User | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -288,11 +352,7 @@ export function TasksPageClient() {
             <Card
               key={task.id}
               size="sm"
-              className={
-                task.is_done
-                  ? "bg-muted/70 text-muted-foreground"
-                  : "bg-background"
-              }
+              className={taskCardClassName(task)}
             >
               <CardContent className="grid gap-3">
                 <div className="flex items-start gap-3">
@@ -317,6 +377,7 @@ export function TasksPageClient() {
                       {task.is_done ? (
                         <Badge variant="secondary">Done</Badge>
                       ) : null}
+                      {taskDueBadge(task)}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                       <span>Due: {task.due_date ?? "No date"}</span>

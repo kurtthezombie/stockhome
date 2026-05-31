@@ -51,6 +51,13 @@ type InventoryForm = {
 
 type InventoryFilter = InventoryStatus;
 
+type InventoryPageClientProps = {
+  title?: string;
+  description?: string;
+  initialStatusFilters?: InventoryFilter[];
+  initialExpiringSoonOnly?: boolean;
+};
+
 const emptyForm: InventoryForm = {
   name: "",
   status: "available",
@@ -139,13 +146,23 @@ function statusFilterClassName(status: InventoryFilter, isSelected: boolean) {
   return "border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/15";
 }
 
-export function InventoryPageClient() {
+export function InventoryPageClient({
+  title = "Inventory",
+  description = "Track household stock, availability, and expiry dates.",
+  initialStatusFilters = [],
+  initialExpiringSoonOnly = false,
+}: InventoryPageClientProps) {
   const [user, setUser] = useState<User | null>(null);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [form, setForm] = useState<InventoryForm>(emptyForm);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null);
-  const [statusFilters, setStatusFilters] = useState<InventoryFilter[]>([]);
+  const [statusFilters, setStatusFilters] = useState<InventoryFilter[]>(
+    initialStatusFilters,
+  );
+  const [expiringSoonOnly, setExpiringSoonOnly] = useState(
+    initialExpiringSoonOnly,
+  );
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -164,14 +181,15 @@ export function InventoryPageClient() {
     return items.filter((item) => {
       const matchesStatus =
         statusFilters.length === 0 || statusFilters.includes(item.status);
+      const matchesExpiry = !expiringSoonOnly || isExpiringSoon(item.expiry_date);
       const matchesCategory =
         categoryFilter === "All" || item.category === categoryFilter;
       const matchesName =
         !normalizedQuery || item.name.toLowerCase().includes(normalizedQuery);
 
-      return matchesStatus && matchesCategory && matchesName;
+      return matchesStatus && matchesExpiry && matchesCategory && matchesName;
     });
-  }, [categoryFilter, items, searchQuery, statusFilters]);
+  }, [categoryFilter, expiringSoonOnly, items, searchQuery, statusFilters]);
 
   function toggleStatusFilter(status: InventoryFilter) {
     setStatusFilters((currentFilters) =>
@@ -323,12 +341,8 @@ export function InventoryPageClient() {
       <div className="grid gap-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Inventory
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Track household stock, availability, and expiry dates.
-            </p>
+            <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+            <p className="text-sm text-muted-foreground">{description}</p>
           </div>
           <Button className="h-10 px-4 text-sm" onClick={openAddDialog}>
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
@@ -338,6 +352,21 @@ export function InventoryPageClient() {
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
+        {expiringSoonOnly ? (
+          <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+            <span>Showing items expiring soon.</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="ml-auto text-destructive hover:bg-destructive/10"
+              onClick={() => setExpiringSoonOnly(false)}
+            >
+              Clear
+            </Button>
+          </div>
+        ) : null}
+
         <Input
           value={searchQuery}
           placeholder="Search items"
@@ -345,7 +374,7 @@ export function InventoryPageClient() {
           className="h-10 max-w-md"
         />
 
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:overflow-visible sm:px-0">
           {[
             { label: "Available", value: "available" },
             { label: "Low stock", value: "low_stock" },
@@ -359,7 +388,7 @@ export function InventoryPageClient() {
                 key={filterOption.value}
                 variant="outline"
                 className={cn(
-                  "h-9 px-3",
+                  "h-8 shrink-0 px-2.5 text-xs",
                   statusFilterClassName(status, isSelected),
                 )}
                 onClick={() => toggleStatusFilter(status)}
