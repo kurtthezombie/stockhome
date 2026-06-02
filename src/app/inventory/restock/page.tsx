@@ -4,8 +4,9 @@ export default function RestockPage() {
   return (
     <InventoryPageClient
       title="Restock"
-      description="Items that are low stock or unavailable."
+      description="Build a grocery list from low stock and unavailable items."
       initialStatusFilters={["low_stock", "unavailable"]}
+      showGroceryList
     />
   );
 }
