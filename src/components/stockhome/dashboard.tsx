@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { AppShell } from "@/components/stockhome/app-shell";
+import { LoadingStatus } from "@/components/ui/loading-status";
 import {
   Card,
   CardContent,
@@ -100,7 +101,8 @@ export function Dashboard() {
   return (
     <AppShell>
       <div className="grid gap-6">
-        <div>
+        <div className="page-heading">
+          <p className="page-eyebrow">Your home at a glance</p>
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
             Quick view of household tasks and stock status.
@@ -108,18 +110,19 @@ export function Dashboard() {
         </div>
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {isLoading ? <LoadingStatus className="justify-start text-sm text-primary">Loading your overview… taking stock of things.</LoadingStatus> : null}
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {summaries.map((summary) => (
             <Link key={summary.label} href={summary.href}>
-              <Card className="h-full transition-colors hover:bg-muted/50">
+              <Card className="h-full border-t-4 border-t-primary/60 transition-colors hover:bg-secondary/50">
                 <CardHeader>
                   <CardDescription>{summary.label}</CardDescription>
-                  <CardTitle className="text-3xl">{summary.value}</CardTitle>
+                  <CardTitle className="text-4xl font-semibold text-primary">{isLoading ? "—" : summary.value}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-xs text-muted-foreground">
-                    {isLoading ? "Loading..." : summary.detail}
+                    {summary.detail}
                   </p>
                 </CardContent>
               </Card>

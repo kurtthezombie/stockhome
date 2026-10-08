@@ -14,6 +14,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/stockhome/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LoadingStatus } from "@/components/ui/loading-status";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -129,7 +130,7 @@ function itemCardClassName(item: InventoryItem, expiringSoon: boolean) {
     return "bg-amber-50 ring-amber-200";
   }
 
-  return "bg-background";
+  return "bg-card";
 }
 
 function statusFilterClassName(status: InventoryFilter, isSelected: boolean) {
@@ -401,8 +402,9 @@ export function InventoryPageClient({
   return (
     <AppShell>
       <div className="grid gap-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="page-heading flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <p className="page-eyebrow">Every essential, accounted for</p>
             <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
             <p className="text-sm text-muted-foreground">{description}</p>
           </div>
@@ -620,7 +622,7 @@ export function InventoryPageClient({
           ) : null}
         </div>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading inventory...</p>
+          <LoadingStatus className="justify-start text-sm text-primary">Loading your stock… checking behind the pasta.</LoadingStatus>
         ) : null}
       </div>
 
@@ -811,7 +813,7 @@ export function InventoryPageClient({
                 Cancel
               </Button>
               <Button type="submit" disabled={isSaving}>
-                {isSaving ? "Saving..." : "Save"}
+                {isSaving ? <LoadingStatus>Saving… shelf secured.</LoadingStatus> : "Save"}
               </Button>
             </DialogFooter>
           </form>

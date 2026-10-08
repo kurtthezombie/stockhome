@@ -8,6 +8,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/stockhome/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LoadingStatus } from "@/components/ui/loading-status";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -82,7 +83,7 @@ function taskCardClassName(task: Task) {
     return "bg-amber-50 ring-amber-200";
   }
 
-  return "bg-background";
+  return "bg-card";
 }
 
 function taskDueBadge(task: Task) {
@@ -308,8 +309,9 @@ export function TasksPageClient() {
   return (
     <AppShell>
       <div className="grid gap-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="page-heading flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <p className="page-eyebrow">A little progress, every day</p>
             <h1 className="text-2xl font-semibold tracking-tight">Tasks</h1>
             <p className="text-sm text-muted-foreground">
               Track household chores and small errands.
@@ -417,7 +419,7 @@ export function TasksPageClient() {
           ) : null}
         </div>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading tasks...</p>
+          <LoadingStatus className="justify-start text-sm text-primary">Loading tasks… the pantry won’t organize itself.</LoadingStatus>
         ) : null}
       </div>
 
@@ -480,7 +482,7 @@ export function TasksPageClient() {
                 Cancel
               </Button>
               <Button type="submit" disabled={isSaving}>
-                {isSaving ? "Saving..." : "Save"}
+                {isSaving ? <LoadingStatus>Saving… noted, not jarred.</LoadingStatus> : "Save"}
               </Button>
             </DialogFooter>
           </form>
