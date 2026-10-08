@@ -25,7 +25,7 @@ const navItems = [
   { href: "/", label: "Dashboard" },
   { href: "/tasks", label: "Tasks" },
   { href: "/inventory", label: "Inventory" },
-  { href: "/inventory/restock", label: "Restock" },
+  { href: "/inventory/restock", label: "Groceries" },
   { href: "/settings", label: "Settings" },
 ];
 
