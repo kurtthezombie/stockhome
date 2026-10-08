@@ -1,6 +1,7 @@
 import type { FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
+import { LoadingStatus } from "@/components/ui/loading-status";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -130,6 +131,8 @@ export function InventoryFormDialog({
               <Label htmlFor="item-unit">Unit</Label>
               <Input
                 id="item-unit"
+                aria-invalid={Boolean(errors.unit)}
+                aria-describedby={errors.unit ? "item-unit-error" : undefined}
                 value={form.unit}
                 placeholder="bottle, kg, roll"
                 onChange={(event) =>
@@ -139,6 +142,7 @@ export function InventoryFormDialog({
                   })
                 }
               />
+              {errors.unit ? <p id="item-unit-error" className="text-xs text-destructive">{errors.unit}</p> : null}
             </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -199,7 +203,7 @@ export function InventoryFormDialog({
                   })
                 }
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full" aria-invalid={Boolean(errors.category)} aria-describedby={errors.category ? "item-category-error" : undefined}>
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -210,12 +214,15 @@ export function InventoryFormDialog({
                   ))}
                 </SelectContent>
               </Select>
+              {errors.category ? <p id="item-category-error" className="text-xs text-destructive">{errors.category}</p> : null}
             </div>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="item-notes">Notes</Label>
             <Textarea
               id="item-notes"
+              aria-invalid={Boolean(errors.notes)}
+              aria-describedby={errors.notes ? "item-notes-error" : undefined}
               value={form.notes}
               placeholder="Brand, storage location, or reminder"
               onChange={(event) =>
@@ -225,6 +232,7 @@ export function InventoryFormDialog({
                 })
               }
             />
+            {errors.notes ? <p id="item-notes-error" className="text-xs text-destructive">{errors.notes}</p> : null}
           </div>
           <DialogFooter>
             <Button
@@ -235,7 +243,7 @@ export function InventoryFormDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={isSaving}>
-              {isSaving ? "Saving..." : "Save"}
+              {isSaving ? <LoadingStatus>Saving… shelf secured.</LoadingStatus> : "Save"}
             </Button>
           </DialogFooter>
         </form>

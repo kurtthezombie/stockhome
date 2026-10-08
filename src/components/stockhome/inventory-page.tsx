@@ -25,6 +25,7 @@ import {
   validateInventoryForm,
 } from "@/components/stockhome/inventory/inventory-utils";
 import { Button } from "@/components/ui/button";
+import { LoadingStatus } from "@/components/ui/loading-status";
 import { supabase } from "@/lib/supabase";
 import type { InventoryItem } from "@/types";
 
@@ -48,7 +49,6 @@ export function InventoryPageClient({
     initialExpiringSoonOnly,
   );
   const [categoryFilter, setCategoryFilter] = useState("All");
-  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -165,11 +165,12 @@ export function InventoryPageClient({
 
     setIsSaving(true);
     setError(null);
+    setFormErrors({});
 
     const payload = {
       name: form.name.trim(),
       status: form.status,
-      quantity: form.quantity ? Number(form.quantity) : null,
+      quantity: Number(form.quantity.trim()),
       unit: form.unit.trim() || null,
       expiry_date: form.has_expiry_date ? form.expiry_date || null : null,
       category: form.category.trim() || null,
@@ -227,9 +228,6 @@ export function InventoryPageClient({
     setItems((currentItems) =>
       currentItems.filter((currentItem) => currentItem.id !== itemToDelete.id),
     );
-    setExpandedItemId((currentId) =>
-      currentId === itemToDelete.id ? null : currentId,
-    );
     setItemToDelete(null);
     setIsDeleteDialogOpen(false);
   }
@@ -237,8 +235,9 @@ export function InventoryPageClient({
   return (
     <AppShell>
       <div className="grid gap-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="page-heading flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <p className="page-eyebrow">Every essential, accounted for</p>
             <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
             <p className="text-sm text-muted-foreground">{description}</p>
           </div>
@@ -253,7 +252,7 @@ export function InventoryPageClient({
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
         {showGroceryList ? (
-          <GroceryList items={filteredItems} />
+          isLoading ? <LoadingStatus className="justify-start text-sm text-primary">Loading your stock… checking behind the pasta.</LoadingStatus> : user ? <GroceryList key={user.id} items={items} userId={user.id} /> : null
         ) : (
           <>
             <InventoryFilters
@@ -269,12 +268,10 @@ export function InventoryPageClient({
             />
 
             <InventoryList
-              expandedItemId={expandedItemId}
               isLoading={isLoading}
               items={filteredItems}
               onDeleteItem={openDeleteDialog}
               onEditItem={openEditDialog}
-              onExpandedItemChange={setExpandedItemId}
             />
           </>
         )}

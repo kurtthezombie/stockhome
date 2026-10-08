@@ -1,16 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { LoadingStatus } from "@/components/ui/loading-status";
+import { AuthLayout } from "@/components/stockhome/auth-layout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
@@ -51,18 +47,14 @@ export function LoginForm() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-lg">StockHome</CardTitle>
-          <CardDescription>Log in with your household account.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="grid gap-4" onSubmit={handleSubmit}>
+    <AuthLayout title="Welcome home." description="Log in to pick up where you left off. Everything you need, right where you left it.">
+          <form className="grid gap-5" onSubmit={handleSubmit} aria-busy={isSubmitting}>
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
+                placeholder="you@example.com"
+                disabled={isSubmitting}
                 autoComplete="email"
                 type="email"
                 value={email}
@@ -74,6 +66,8 @@ export function LoginForm() {
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
+                placeholder="Enter your password"
+                disabled={isSubmitting}
                 autoComplete="current-password"
                 type="password"
                 value={password}
@@ -81,14 +75,18 @@ export function LoginForm() {
                 required
               />
             </div>
-            {error ? <p className="text-xs text-destructive">{error}</p> : null}
+            {error ? <p role="alert" className="auth-error">{error}</p> : null}
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Logging in..." : "Login"}
+              {isSubmitting ? <LoadingStatus>Logging in… pantry awaits.</LoadingStatus> : "Log in"}
             </Button>
           </form>
-        </CardContent>
-      </Card>
-    </main>
+          <p className="mt-8 text-center text-sm text-muted-foreground">
+            New to StockHome?{" "}
+            <Link href="/register" className="auth-link">
+              Create an account
+            </Link>
+          </p>
+    </AuthLayout>
   );
 }
 
