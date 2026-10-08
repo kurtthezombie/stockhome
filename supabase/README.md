@@ -18,7 +18,7 @@ The app needs this migration before grocery lists can load or save. No browser-o
 
 ## Verification
 
-Run `node --test tests/grocery-utils.test.mjs`, `npm run lint`, and `npm run build`.
+Run `npm test`, `npm run lint`, `npm run typecheck`, and `npm run build`.
 
 `tests/grocery-db.test.sql` exercises the migration, database constraints and account isolation against an empty disposable PostgreSQL database. It simulates Supabase Auth and rolls back all test data. Never run this test script against your Supabase project.
 
