@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { Logout01Icon, Menu01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -8,6 +9,7 @@ import type { Session } from "@supabase/supabase-js";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { LoadingStatus } from "@/components/ui/loading-status";
 import {
   Dialog,
   DialogClose,
@@ -79,7 +81,7 @@ export function AppShell({ children }: AppShellProps) {
   if (isLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-muted/30 p-6">
-        <p className="text-sm text-muted-foreground">Loading StockHome...</p>
+        <LoadingStatus className="text-sm text-primary">Loading your home… counting beans, literally.</LoadingStatus>
       </main>
     );
   }
@@ -89,29 +91,26 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <header className="border-b bg-background">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4">
+    <div className="min-h-dvh bg-background">
+      <header className="border-b border-border/80 bg-white">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div>
-            <Link href="/" className="text-lg font-semibold tracking-tight">
-              StockHome
+            <Link href="/" aria-label="StockHome dashboard" className="block rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+              <Image src="/logo.png" alt="StockHome" width={2172} height={724} preload className="-ml-4 h-auto w-52" />
             </Link>
-            <p className="text-xs text-muted-foreground">
-              Household tasks and inventory
-            </p>
           </div>
-          <nav className="hidden items-center gap-1 md:flex">
+          <nav aria-label="Main navigation" className="hidden items-center gap-1 md:flex">
             {navItems.map((item) => (
               <Button
                 key={item.href}
                 asChild
                   variant={pathname === item.href ? "secondary" : "ghost"}
-                size="sm"
+                className="h-10 px-3"
               >
-                <Link href={item.href}>{item.label}</Link>
+                <Link href={item.href} aria-current={pathname === item.href ? "page" : undefined}>{item.label}</Link>
               </Button>
             ))}
-            <Button variant="outline" size="sm" onClick={handleLogout}>
+            <Button variant="outline" className="ml-3 h-10" onClick={handleLogout}>
               <HugeiconsIcon icon={Logout01Icon} strokeWidth={2} />
               Logout
             </Button>
@@ -132,13 +131,13 @@ export function AppShell({ children }: AppShellProps) {
               className="top-0 left-0 h-dvh max-w-72 translate-x-0 translate-y-0 content-start rounded-none p-0 sm:max-w-80"
               showCloseButton={false}
             >
-              <DialogHeader className="border-b px-4 py-4">
+              <DialogHeader className="border-b bg-secondary px-5 py-6">
                 <DialogTitle className="text-base">StockHome</DialogTitle>
                 <p className="truncate text-xs text-muted-foreground">
                   {session.user.email}
                 </p>
               </DialogHeader>
-              <nav className="grid gap-2 p-4">
+              <nav aria-label="Mobile navigation" className="grid gap-2 p-4">
                 {navItems.map((item) => (
                   <DialogClose key={item.href} asChild>
                     <Button
@@ -149,7 +148,7 @@ export function AppShell({ children }: AppShellProps) {
                         pathname === item.href && "font-semibold",
                       )}
                     >
-                      <Link href={item.href}>{item.label}</Link>
+                      <Link href={item.href} aria-current={pathname === item.href ? "page" : undefined}>{item.label}</Link>
                     </Button>
                   </DialogClose>
                 ))}
@@ -166,7 +165,7 @@ export function AppShell({ children }: AppShellProps) {
           </Dialog>
         </div>
       </header>
-      <main className={cn("mx-auto w-full max-w-6xl px-4 py-6")}>
+      <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
         {children}
       </main>
     </div>

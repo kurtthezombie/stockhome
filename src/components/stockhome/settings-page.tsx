@@ -33,23 +33,24 @@ export function SettingsPageClient() {
   return (
     <AppShell>
       <div className="grid gap-6">
-        <div>
+        <div className="page-heading">
+          <p className="page-eyebrow">Make yourself at home</p>
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
           <p className="text-sm text-muted-foreground">
-            Basic account and future app options.
+            Your account and a few things to look forward to.
           </p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>Supabase connection</CardTitle>
-              <CardDescription>Frontend uses the public anon key.</CardDescription>
+              <CardTitle>Your account</CardTitle>
+              <CardDescription>Your home, all in one place.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3">
               <div className="flex items-center gap-2">
-                <Badge variant="secondary">Configured</Badge>
-                <span className="text-xs text-muted-foreground">
+                <Badge variant="secondary">Signed in</Badge>
+                <span className="min-w-0 break-all text-sm text-muted-foreground">
                   {email ?? "Authenticated user"}
                 </span>
               </div>
@@ -58,28 +59,28 @@ export function SettingsPageClient() {
 
           <Card>
             <CardHeader>
-              <CardTitle>JSON export/import later</CardTitle>
+              <CardTitle>Backup & restore</CardTitle>
               <CardDescription>
-                Placeholder for backup and restore tools.
+                Keep a copy of your household data.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground">
-                Export/import is not implemented yet.
+                Coming soon: export and import your data.
               </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Future app preferences</CardTitle>
+              <CardTitle>Home preferences</CardTitle>
               <CardDescription>
-                Placeholder for household display preferences.
+                The little details that make it yours.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground">
-                Preferences are not implemented yet.
+                More ways to personalize your home are coming soon.
               </p>
             </CardContent>
           </Card>
@@ -87,7 +88,7 @@ export function SettingsPageClient() {
           <Card>
             <CardHeader>
               <CardTitle>Session</CardTitle>
-              <CardDescription>End the current Supabase session.</CardDescription>
+              <CardDescription>Log out of StockHome on this device.</CardDescription>
             </CardHeader>
             <CardContent>
               <Button variant="outline" onClick={handleLogout}>
