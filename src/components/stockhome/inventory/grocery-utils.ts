@@ -35,6 +35,6 @@ export function validateGroceryForm(form: GroceryForm): string | null {
 
 export function groceryListText(items: GroceryItem[]) {
   return items.filter((item) => !item.is_purchased)
-    .map((item) => `- ${item.name}: ${item.quantity}${item.unit ? ` ${item.unit}` : ""}`)
+    .map((item) => `[ ] ${item.name}: ${item.quantity}${item.unit ? ` ${item.unit}` : ""}`)
     .join("\n");
 }

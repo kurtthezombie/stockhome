@@ -1,6 +1,8 @@
 ﻿"use client";
 
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ActionNotice } from "@/components/ui/action-notice";
+import { AnimatedList } from "@/components/ui/animated-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -28,11 +30,19 @@ export function GroceryList({ items, userId }: { items: InventoryItem[]; userId:
   const [busy, setBusy] = useState(false);
   const mutationLock = useRef(false);
   const requestId = useRef(0);
+  const focusAfterUpdate = useRef<string | null>(null);
   const [form, setForm] = useState<GroceryForm>(emptyGroceryForm);
   const [formError, setFormError] = useState<string | null>(null);
   const [editing, setEditing] = useState<GroceryItem | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [toRemove, setToRemove] = useState<GroceryItem | null>(null);
+
+  useLayoutEffect(() => {
+    if (focusAfterUpdate.current) {
+      document.getElementById(focusAfterUpdate.current)?.focus();
+      focusAfterUpdate.current = null;
+    }
+  }, [groceries]);
 
   const load = useCallback(() => {
     const request = ++requestId.current;
@@ -121,9 +131,13 @@ export function GroceryList({ items, userId }: { items: InventoryItem[]; userId:
 
   async function toggle(item: GroceryItem, checked: boolean) {
     if (!startMutation()) return;
+    const hadFocus = document.activeElement?.id === `grocery-${item.id}`;
     try {
       const result = await supabase.from("grocery_items").update({ is_purchased: checked }).eq("id", item.id).eq("user_id", userId).select().single();
       if (result.error) throw result.error;
+      if (hadFocus && (document.activeElement?.id === `grocery-${item.id}` || document.activeElement === document.body)) {
+        focusAfterUpdate.current = `grocery-${item.id}`;
+      }
       setGroceries((current) => current.map((row) => row.id === item.id ? result.data as GroceryItem : row));
       setNotice(checked ? `${item.name} marked purchased.` : `${item.name} is back on your shopping list.`);
     } catch { setError("We couldn't update this item. Your previous selection is unchanged. Please try again."); }
@@ -144,6 +158,7 @@ export function GroceryList({ items, userId }: { items: InventoryItem[]; userId:
 
   async function copyList() {
     setError(null);
+    setNotice("");
     try {
       await navigator.clipboard.writeText(groceryListText(groceries));
       setNotice("Copied your remaining shopping items.");
@@ -152,8 +167,8 @@ export function GroceryList({ items, userId }: { items: InventoryItem[]; userId:
 
   function renderItem(item: GroceryItem) {
     return (
-      <li key={item.id} className="flex flex-wrap items-center gap-3 rounded-xl border bg-card p-4">
-        <Checkbox id={`grocery-${item.id}`} checked={item.is_purchased} disabled={!ready} onCheckedChange={(checked) => void toggle(item, checked === true)} />
+      <li key={item.id} data-motion-id={item.id} className={`motion-list-item flex flex-wrap items-center gap-3 rounded-xl border p-4 ${item.is_purchased ? "bg-muted/70" : "bg-card"}`}>
+        <Checkbox className="motion-check" id={`grocery-${item.id}`} checked={item.is_purchased} disabled={!ready} onCheckedChange={(checked) => void toggle(item, checked === true)} />
         <label htmlFor={`grocery-${item.id}`} className="min-w-0 flex-1 cursor-pointer">
           <span className={`block break-words text-sm font-medium ${item.is_purchased ? "text-muted-foreground line-through" : ""}`}>{item.name}</span>
           <span className="text-xs text-muted-foreground">{item.is_purchased ? "Purchased" : "Buy"}: {item.quantity} {item.unit}</span>
@@ -178,14 +193,13 @@ export function GroceryList({ items, userId }: { items: InventoryItem[]; userId:
               <Button disabled={!ready} onClick={() => openAdd()}>Add item</Button>
             </div>
           </div>
-          {loading ? <LoadingStatus className="justify-start text-sm text-primary">Loading your list… making room for snacks.</LoadingStatus> : null}
+          {loading ? <LoadingStatus messageGroup="groceries" className="justify-start text-sm text-primary">Loading your list… making room for snacks.</LoadingStatus> : null}
           {loadError ? <div role="alert" className="text-sm text-destructive">{loadError} <Button variant="link" onClick={refresh}>Retry</Button></div> : null}
           {error && !toRemove ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-          <p role="status" className="text-sm text-primary">{notice}</p>
           {!loading && !loadError ? <>
             <h3 className="text-sm font-semibold">To buy ({pending.length})</h3>
-            {pending.length ? <ul className="grid gap-3">{pending.map(renderItem)}</ul> : <p className="rounded-xl bg-muted p-5 text-sm text-muted-foreground">Nothing to buy yet. Add an item or choose a restock suggestion below.</p>}
-            {purchased.length > 0 ? <div className="grid gap-3"><h3 className="text-sm font-semibold">Purchased ({purchased.length})</h3><ul className="grid gap-3">{purchased.map(renderItem)}</ul></div> : null}
+            {pending.length ? <AnimatedList as="ul" className="grid gap-3">{pending.map(renderItem)}</AnimatedList> : <p className="rounded-xl bg-muted p-5 text-sm text-muted-foreground">Nothing to buy yet. Add an item or choose a restock suggestion below.</p>}
+            {purchased.length > 0 ? <div className="grid gap-3"><h3 className="text-sm font-semibold">Purchased ({purchased.length})</h3><AnimatedList as="ul" className="grid gap-3">{purchased.map(renderItem)}</AnimatedList></div> : null}
             <p className="text-xs leading-5 text-muted-foreground">Your list is saved to your account. Checking an item marks it purchased; update its stock separately in Inventory.</p>
           </> : null}
         </CardContent>
@@ -193,9 +207,10 @@ export function GroceryList({ items, userId }: { items: InventoryItem[]; userId:
       <Card>
         <CardContent className="grid gap-4">
           <div><h2 className="text-lg font-semibold">Restock suggestions</h2><p className="mt-1 text-sm text-muted-foreground">Low-stock and unavailable items. You decide what goes on your list.</p></div>
-          {suggestions.length ? <ul className="grid gap-3 sm:grid-cols-2">{suggestions.map((item) => <li key={item.id} className="flex items-center justify-between gap-3 rounded-xl border p-4"><div className="min-w-0"><p className="break-words text-sm font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{statusLabels[item.status]} · At home: {item.quantity} {item.unit}</p></div><Button variant="secondary" size="sm" disabled={!ready} onClick={() => openAdd(item)} aria-label={`Add ${item.name} to grocery list`}>Add to list</Button></li>)}</ul> : <p className="text-sm text-muted-foreground">No additional restock suggestions. You can still add anything you need.</p>}
+          {suggestions.length ? <AnimatedList as="ul" className="grid gap-3 sm:grid-cols-2">{suggestions.map((item) => <li key={item.id} data-motion-id={item.id} className="flex items-center justify-between gap-3 rounded-xl border p-4"><div className="min-w-0"><p className="break-words text-sm font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{statusLabels[item.status]} · At home: {item.quantity} {item.unit}</p></div><Button variant="secondary" size="sm" disabled={!ready} onClick={() => openAdd(item)} aria-label={`Add ${item.name} to grocery list`}>Add to list</Button></li>)}</AnimatedList> : <p className="text-sm text-muted-foreground">No additional restock suggestions. You can still add anything you need.</p>}
         </CardContent>
       </Card>
+      <ActionNotice message={notice} onDismiss={() => setNotice("")} />
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!busy) setDialogOpen(open); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>{editing ? "Edit shopping item" : "Add to your grocery list"}</DialogTitle><DialogDescription>Choose any item at home or add something new. Set the amount you want to buy.</DialogDescription></DialogHeader>

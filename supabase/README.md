@@ -1,5 +1,15 @@
 # Grocery list database setup
 
+## Backup and restore setup
+
+After the grocery migration, apply `migrations/20261009000100_backup_restore.sql` in the Supabase SQL editor or through your migration workflow. It requires the existing `inventory_items`, `tasks`, and `grocery_items` tables, their authenticated table grants, and owner-only row-level security policies.
+
+Settings now exports a versioned JSON snapshot of inventory, groceries, and tasks. Files exclude credentials, owner IDs, and audit timestamps. Import accepts files up to 10 MB and 10,000 records per list, validates their contents, and previews counts before confirmation. Add mode creates new records; existing grocery names cause the entire import to fail. Replace mode deletes only the signed-in account's existing records before restoring. Both modes assign new IDs and preserve grocery-to-inventory links. Uploaded owner IDs are ignored.
+
+The database functions use `security invoker`, the caller's table permissions, and RLS; only authenticated users can execute them. Export requires SELECT; additive import requires SELECT/INSERT; replacement also requires DELETE. No admin key is required. Imports run in one transaction, so failures roll back all changes. Export runs as a single database snapshot and does not depend on API row pagination. Keep downloaded files private.
+
+Run `tests/backup-db.test.sql` with `psql -v ON_ERROR_STOP=1` against an **empty disposable database only** to verify links, ownership, anonymous denial, replacement, and rollback. It simulates the existing inventory/tasks schema and rolls back all fixtures. After applying the migration to Supabase, also verify an export/import round trip with a test account, an additive duplicate error, and a failed replacement; check that another account's data is unaffected.
+
 Run `migrations/20261008000100_grocery_items.sql` once in the Supabase SQL editor for the project used by `.env.local`, or apply it through your existing Supabase migration workflow. It requires the existing `public.inventory_items` table and Supabase Auth.
 
 The migration adds a separate `grocery_items` table. It does not change existing inventory data. Row-level security restricts each account to its own grocery list, including ownership checks for linked inventory items. Do not disable RLS or put database/admin credentials in `NEXT_PUBLIC_*` variables.

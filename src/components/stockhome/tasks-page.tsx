@@ -3,9 +3,11 @@
 import { Add01Icon, Delete02Icon, Edit02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { User } from "@supabase/supabase-js";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { AppShell } from "@/components/stockhome/app-shell";
+import { ActionNotice } from "@/components/ui/action-notice";
+import { AnimatedList } from "@/components/ui/animated-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingStatus } from "@/components/ui/loading-status";
@@ -119,6 +121,26 @@ export function TasksPageClient() {
   const [isClearing, setIsClearing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<TaskFilter>("todo");
+  const [notice, setNotice] = useState<string | null>(null);
+  const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
+  const mutationLock = useRef(false);
+  const focusAfterUpdate = useRef<string | null>(null);
+  const isBusy = isSaving || isDeleting || isClearing || updatingTaskId !== null;
+
+  useLayoutEffect(() => {
+    if (focusAfterUpdate.current) {
+      document.getElementById(focusAfterUpdate.current)?.focus();
+      focusAfterUpdate.current = null;
+    }
+  }, [tasks]);
+
+  function startMutation() {
+    if (mutationLock.current) return false;
+    mutationLock.current = true;
+    setNotice(null);
+    setError(null);
+    return true;
+  }
 
   const taskCounts = useMemo(
     () => ({
@@ -201,9 +223,9 @@ export function TasksPageClient() {
       setError("You must be logged in to save tasks.");
       return;
     }
-
+    if (!form.title.trim()) { setError("Enter a task title."); return; }
+    if (!startMutation()) return;
     setIsSaving(true);
-    setError(null);
 
     const payload = {
       title: form.title.trim(),
@@ -211,45 +233,47 @@ export function TasksPageClient() {
       notes: form.notes.trim() || null,
     };
 
-    const result = editingTask
-      ? await supabase.from("tasks").update(payload).eq("id", editingTask.id)
-      : await supabase.from("tasks").insert({
-          ...payload,
-          is_done: false,
-          user_id: user.id,
-        });
-
-    setIsSaving(false);
-
-    if (result.error) {
-      setError(result.error.message);
-      return;
+    try {
+      const result = editingTask
+        ? await supabase.from("tasks").update(payload).eq("id", editingTask.id).eq("user_id", user.id).select().single()
+        : await supabase.from("tasks").insert({ ...payload, is_done: false, user_id: user.id }).select().single();
+      if (result.error) throw result.error;
+      const saved = result.data as Task;
+      setTasks((current) => editingTask ? current.map((task) => task.id === saved.id ? saved : task) : [saved, ...current]);
+      setNotice(`${saved.title} ${editingTask ? "updated" : "added to your tasks"}.`);
+      setIsDialogOpen(false);
+      setForm(emptyForm);
+      setEditingTask(null);
+    } catch {
+      setError("We couldn't save this task. Please try again.");
+    } finally {
+      setIsSaving(false);
+      mutationLock.current = false;
     }
-
-    setIsDialogOpen(false);
-    setForm(emptyForm);
-    setEditingTask(null);
-    await loadTasks();
   }
 
   async function toggleTask(task: Task) {
-    const { error: updateError } = await supabase
-      .from("tasks")
-      .update({ is_done: !task.is_done })
-      .eq("id", task.id);
-
-    if (updateError) {
-      setError(updateError.message);
-      return;
+    if (!user || !startMutation()) return;
+    const hadFocus = document.activeElement?.id === `task-${task.id}`;
+    setUpdatingTaskId(task.id);
+    try {
+      const result = await supabase.from("tasks").update({ is_done: !task.is_done })
+        .eq("id", task.id).eq("user_id", user.id).select().single();
+      if (result.error) throw result.error;
+      const saved = result.data as Task;
+      if (hadFocus && (document.activeElement?.id === `task-${task.id}` || document.activeElement === document.body)) {
+        const remaining = filteredTasks.filter((row) => row.id !== task.id);
+        const next = remaining[Math.min(filteredTasks.findIndex((row) => row.id === task.id), remaining.length - 1)];
+        focusAfterUpdate.current = filter === "all" ? `task-${task.id}` : next ? `task-${next.id}` : "add-task";
+      }
+      setTasks((current) => current.map((row) => row.id === task.id ? saved : row));
+      setNotice(saved.is_done ? `${saved.title} completed. One less thing to do.` : `${saved.title} is back on your to-do list.`);
+    } catch {
+      setError("We couldn't update this task. Your previous selection is unchanged. Please try again.");
+    } finally {
+      setUpdatingTaskId(null);
+      mutationLock.current = false;
     }
-
-    setTasks((currentTasks) =>
-      currentTasks.map((currentTask) =>
-        currentTask.id === task.id
-          ? { ...currentTask, is_done: !currentTask.is_done }
-          : currentTask,
-      ),
-    );
   }
 
   function openDeleteDialog(task: Task) {
@@ -259,51 +283,45 @@ export function TasksPageClient() {
   }
 
   async function deleteTask() {
-    if (!taskToDelete) {
+    if (!taskToDelete || !user || !startMutation()) {
       return;
     }
 
     setIsDeleting(true);
 
-    const { error: deleteError } = await supabase
-      .from("tasks")
-      .delete()
-      .eq("id", taskToDelete.id);
-
-    setIsDeleting(false);
-
-    if (deleteError) {
-      setError(deleteError.message);
-      return;
+    try {
+      const { error: deleteError } = await supabase.from("tasks").delete()
+        .eq("id", taskToDelete.id).eq("user_id", user.id).select("id").single();
+      if (deleteError) throw deleteError;
+      setTasks((current) => current.filter((task) => task.id !== taskToDelete.id));
+      setNotice(`${taskToDelete.title} deleted.`);
+      setTaskToDelete(null);
+      setIsDeleteDialogOpen(false);
+    } catch {
+      setError("We couldn't delete this task. Please try again.");
+    } finally {
+      setIsDeleting(false);
+      mutationLock.current = false;
     }
-
-    setTasks((currentTasks) =>
-      currentTasks.filter((currentTask) => currentTask.id !== taskToDelete.id),
-    );
-    setTaskToDelete(null);
-    setIsDeleteDialogOpen(false);
   }
 
   async function clearCompletedTasks() {
+    if (!user || !startMutation()) return;
     setIsClearing(true);
-    setError(null);
-
-    const { error: deleteError } = await supabase
-      .from("tasks")
-      .delete()
-      .eq("is_done", true);
-
-    setIsClearing(false);
-
-    if (deleteError) {
-      setError(deleteError.message);
-      return;
+    try {
+      const { data, error: deleteError } = await supabase.from("tasks").delete()
+        .eq("is_done", true).eq("user_id", user.id).select("id");
+      if (deleteError) throw deleteError;
+      const removed = new Set((data ?? []).map((task: { id: string }) => task.id));
+      setTasks((current) => current.filter((task) => !removed.has(task.id)));
+      setNotice(`${removed.size} completed ${removed.size === 1 ? "task" : "tasks"} cleared.`);
+      setIsClearDialogOpen(false);
+    } catch {
+      setError("We couldn't clear completed tasks. Please try again.");
+    } finally {
+      setIsClearing(false);
+      mutationLock.current = false;
     }
-
-    setTasks((currentTasks) =>
-      currentTasks.filter((currentTask) => !currentTask.is_done),
-    );
-    setIsClearDialogOpen(false);
   }
 
   return (
@@ -317,13 +335,14 @@ export function TasksPageClient() {
               Track household chores and small errands.
             </p>
           </div>
-          <Button className="h-10 px-4 text-sm" onClick={openAddDialog}>
+          <Button id="add-task" disabled={isBusy} className="h-10 px-4 text-sm" onClick={openAddDialog}>
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             Add task
           </Button>
         </div>
 
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {error && !isDialogOpen && !isDeleteDialogOpen && !isClearDialogOpen ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+        <ActionNotice message={notice} onDismiss={() => setNotice(null)} />
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Tabs
@@ -342,27 +361,32 @@ export function TasksPageClient() {
             <Button
               variant="destructive"
               className="h-10 px-4 text-sm sm:h-8 sm:text-xs"
-              onClick={() => setIsClearDialogOpen(true)}
+              disabled={isBusy}
+              onClick={() => { setError(null); setIsClearDialogOpen(true); }}
             >
               Clear completed
             </Button>
           ) : null}
         </div>
 
-        <div className="grid gap-3">
+        <AnimatedList className="grid gap-3">
           {filteredTasks.map((task) => (
             <Card
               key={task.id}
+              data-motion-id={task.id}
               size="sm"
-              className={taskCardClassName(task)}
+              className={`motion-list-item ${taskCardClassName(task)}`}
             >
               <CardContent className="grid gap-3">
                 <div className="flex items-start gap-3">
                   <div className="pt-1">
                     <Checkbox
+                      id={`task-${task.id}`}
+                      className="motion-check"
+                      disabled={isBusy}
                       checked={task.is_done}
                       onCheckedChange={() => toggleTask(task)}
-                      aria-label={`Mark ${task.title} done`}
+                      aria-label={`Mark ${task.title} ${task.is_done ? "not done" : "done"}`}
                     />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -392,6 +416,7 @@ export function TasksPageClient() {
                     variant="outline"
                     size="icon-lg"
                     onClick={() => openEditDialog(task)}
+                    disabled={isBusy}
                     aria-label={`Edit ${task.title}`}
                     title="Edit"
                   >
@@ -401,6 +426,7 @@ export function TasksPageClient() {
                     variant="destructive"
                     size="icon-lg"
                     onClick={() => openDeleteDialog(task)}
+                    disabled={isBusy}
                     aria-label={`Delete ${task.title}`}
                     title="Delete"
                   >
@@ -417,13 +443,13 @@ export function TasksPageClient() {
               </CardContent>
             </Card>
           ) : null}
-        </div>
+        </AnimatedList>
         {isLoading ? (
-          <LoadingStatus className="justify-start text-sm text-primary">Loading tasks… the pantry won’t organize itself.</LoadingStatus>
+          <LoadingStatus messageGroup="tasks" className="justify-start text-sm text-primary">Loading tasks… the pantry won’t organize itself.</LoadingStatus>
         ) : null}
       </div>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!isSaving) setIsDialogOpen(open); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editingTask ? "Edit task" : "Add task"}</DialogTitle>
@@ -432,6 +458,7 @@ export function TasksPageClient() {
             </DialogDescription>
           </DialogHeader>
           <form className="grid gap-4" onSubmit={handleSubmit}>
+            <fieldset disabled={isSaving} className="grid min-w-0 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="task-title">Title</Label>
               <Input
@@ -473,11 +500,14 @@ export function TasksPageClient() {
                 }
               />
             </div>
+            </fieldset>
+            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsDialogOpen(false)}
+                disabled={isSaving}
               >
                 Cancel
               </Button>
@@ -489,7 +519,7 @@ export function TasksPageClient() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <Dialog open={isDeleteDialogOpen} onOpenChange={(open) => { if (!isDeleting) setIsDeleteDialogOpen(open); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete task?</DialogTitle>
@@ -497,11 +527,13 @@ export function TasksPageClient() {
               This will permanently remove {taskToDelete?.title ?? "this task"}.
             </DialogDescription>
           </DialogHeader>
+          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
               onClick={() => setIsDeleteDialogOpen(false)}
+              disabled={isDeleting}
             >
               Cancel
             </Button>
@@ -517,7 +549,7 @@ export function TasksPageClient() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isClearDialogOpen} onOpenChange={setIsClearDialogOpen}>
+      <Dialog open={isClearDialogOpen} onOpenChange={(open) => { if (!isClearing) setIsClearDialogOpen(open); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Clear completed tasks?</DialogTitle>
@@ -526,11 +558,13 @@ export function TasksPageClient() {
               task{taskCounts.completed === 1 ? "" : "s"}.
             </DialogDescription>
           </DialogHeader>
+          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
               onClick={() => setIsClearDialogOpen(false)}
+              disabled={isClearing}
             >
               Cancel
             </Button>

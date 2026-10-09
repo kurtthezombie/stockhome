@@ -10,6 +10,7 @@ import {
 import type { InventoryItem } from "@/types";
 
 type InventoryDeleteDialogProps = {
+  error?: string | null;
   isDeleting: boolean;
   isOpen: boolean;
   item: InventoryItem | null;
@@ -18,6 +19,7 @@ type InventoryDeleteDialogProps = {
 };
 
 export function InventoryDeleteDialog({
+  error,
   isDeleting,
   isOpen,
   item,
@@ -33,11 +35,13 @@ export function InventoryDeleteDialog({
             This will permanently remove {item?.name ?? "this item"}.
           </DialogDescription>
         </DialogHeader>
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <DialogFooter>
           <Button
             type="button"
             variant="outline"
             onClick={() => onOpenChange(false)}
+            disabled={isDeleting}
           >
             Cancel
           </Button>

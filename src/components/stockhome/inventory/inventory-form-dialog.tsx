@@ -27,6 +27,7 @@ import type { InventoryForm, InventoryFormErrors } from "./inventory-types";
 import { categoryOptions } from "./inventory-utils";
 
 type InventoryFormDialogProps = {
+  error?: string | null;
   editingItem: InventoryItem | null;
   errors: InventoryFormErrors;
   form: InventoryForm;
@@ -38,6 +39,7 @@ type InventoryFormDialogProps = {
 };
 
 export function InventoryFormDialog({
+  error,
   editingItem,
   errors,
   form,
@@ -59,6 +61,7 @@ export function InventoryFormDialog({
           </DialogDescription>
         </DialogHeader>
         <form className="grid gap-4" onSubmit={onSubmit} noValidate>
+          <fieldset disabled={isSaving} className="grid min-w-0 gap-4">
           <div className="grid gap-2">
             <Label htmlFor="item-name">Name</Label>
             <Input
@@ -234,11 +237,14 @@ export function InventoryFormDialog({
             />
             {errors.notes ? <p id="item-notes-error" className="text-xs text-destructive">{errors.notes}</p> : null}
           </div>
+          </fieldset>
+          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              disabled={isSaving}
             >
               Cancel
             </Button>

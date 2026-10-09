@@ -5,6 +5,7 @@ import { Delete02Icon, Edit02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { Badge } from "@/components/ui/badge";
+import { AnimatedList } from "@/components/ui/animated-list";
 import { Button } from "@/components/ui/button";
 import { LoadingStatus } from "@/components/ui/loading-status";
 import { Card, CardContent } from "@/components/ui/card";
@@ -112,13 +113,13 @@ export function InventoryList({
           ))}
         </div>
       </div>
-      <div className={cn("grid items-start gap-4", columns)}>
+      <AnimatedList className={cn("grid items-start gap-4", columns)}>
         {items.map((item) => {
           const expiringSoon = isExpiringSoon(item.expiry_date);
           const notes = item.notes?.trim();
 
           return (
-            <Card key={item.id} className={itemCardClassName(item, expiringSoon)}>
+            <Card key={item.id} data-motion-id={item.id} className={cn("motion-list-item", itemCardClassName(item, expiringSoon))}>
               <CardContent className="grid gap-4">
                 <div className="grid gap-2">
                   <h2 className="min-w-0 break-words text-base font-semibold leading-6">
@@ -195,9 +196,9 @@ export function InventoryList({
             </CardContent>
           </Card>
         ) : null}
-      </div>
+      </AnimatedList>
       {isLoading ? (
-        <LoadingStatus className="justify-start text-sm text-primary">Loading your stock… checking behind the pasta.</LoadingStatus>
+        <LoadingStatus messageGroup="inventory" className="justify-start text-sm text-primary">Loading your stock… checking behind the pasta.</LoadingStatus>
       ) : null}
     </>
   );

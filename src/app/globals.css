@@ -195,3 +195,73 @@
 .auth-link:hover { text-decoration: underline; }
 .auth-link:focus-visible { outline: 2px solid #008783; outline-offset: 4px; border-radius: 2px; }
 .auth-error { border-radius: 0.75rem; padding: 0.75rem 1rem; background: #fff0ed; color: #b42318; font-size: 0.875rem; }
+
+/* Shared motion language. Content stays visible when motion is disabled. */
+@keyframes stockhome-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes stockhome-bar-reveal {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes stockhome-check {
+  from { opacity: 0; transform: scale(0.65); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .motion-enter,
+  .motion-stagger > * {
+    animation: stockhome-enter 380ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
+  .motion-stagger > :nth-child(2) { animation-delay: 40ms; }
+  .motion-stagger > :nth-child(3) { animation-delay: 80ms; }
+  .motion-stagger > :nth-child(4) { animation-delay: 120ms; }
+  .motion-stagger > :nth-child(5) { animation-delay: 160ms; }
+  .motion-stagger > :nth-child(n + 6) { animation-delay: 200ms; }
+  .motion-stagger > :focus-within { animation-delay: 0ms; }
+  .motion-stagger[data-loading="true"] > * { animation: none; }
+
+  .dashboard-summary-card {
+    transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+  }
+
+  .dashboard-summary-link:focus-visible .dashboard-summary-card {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 24px -12px #367d7050;
+  }
+
+  .dashboard-summary-link:active .dashboard-summary-card {
+    transform: translateY(0) scale(0.99);
+  }
+
+  .chart-bar-reveal {
+    transform-origin: left;
+    animation: stockhome-bar-reveal 600ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
+  .chart-bar-segment { transition: width 260ms ease; }
+
+  .motion-list-item {
+    transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+  }
+
+  .motion-check [data-slot="checkbox-indicator"] {
+    animation: stockhome-check 180ms ease-out;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
+  .dashboard-summary-link:hover .dashboard-summary-card {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 24px -12px #367d7050;
+  }
+
+  .dashboard-summary-link:active .dashboard-summary-card {
+    transform: translateY(0) scale(0.99);
+  }
+}

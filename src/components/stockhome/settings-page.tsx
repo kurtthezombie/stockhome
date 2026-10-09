@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AppShell } from "@/components/stockhome/app-shell";
+import { BackupControls } from "@/components/stockhome/backup-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -65,9 +66,7 @@ export function SettingsPageClient() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-xs text-muted-foreground">
-                Coming soon: export and import your data.
-              </p>
+              <BackupControls />
             </CardContent>
           </Card>
 
