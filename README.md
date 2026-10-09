@@ -36,6 +36,8 @@ These tests do not connect to Supabase. Database migration and account-isolation
 
 ## Learn More
 
+For optional local code relationship exploration, see the [Graphify pilot](GRAPHIFY.md).
+
 To learn more about Next.js, take a look at the following resources:
 
 - [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.

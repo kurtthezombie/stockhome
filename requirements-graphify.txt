@@ -1,0 +1,2 @@
+# Optional developer tooling; separate from the application dependencies.
+graphifyy[sql,mcp]==0.9.82
