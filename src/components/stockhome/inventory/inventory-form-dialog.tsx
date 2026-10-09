@@ -51,7 +51,7 @@ export function InventoryFormDialog({
 }: InventoryFormDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent returnFocusFallback="#add-inventory-item">
         <DialogHeader>
           <DialogTitle>
             {editingItem ? "Edit inventory item" : "Add inventory item"}

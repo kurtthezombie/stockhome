@@ -28,7 +28,7 @@ export function InventoryDeleteDialog({
 }: InventoryDeleteDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent returnFocusFallback="#add-inventory-item">
         <DialogHeader>
           <DialogTitle>Delete item?</DialogTitle>
           <DialogDescription>

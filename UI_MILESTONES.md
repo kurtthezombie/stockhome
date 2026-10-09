@@ -35,16 +35,19 @@ Done when: create, edit, complete, purchase, and delete flows remain responsive;
 
 ## Milestone 3 — Loading and feedback
 
-Status: in progress. Dashboard skeleton loading, refresh retention, and action feedback are implemented; list loading states and dialog refinements remain planned.
+Status: implemented; final browser acceptance review remains pending. Dashboard and list loading, retained refresh, retry and empty-state actions, and dialog motion/focus refinements are implemented.
 
 - [x] Add layout-matched dashboard skeletons, with reduced-motion support.
 - [x] Keep dashboard cards, chart filters, and previous values visible during refresh; retain cached values on temporary errors and show a retry message.
-- [ ] Add skeletons and smoother refresh to list loading states.
+- [x] Add skeletons to inventory, tasks, groceries, and the initial restock page load. Match the selected inventory layout and respect reduced motion.
+- [x] Keep inventory, task, and grocery rows visible during refresh and after refresh failures, including previously empty lists. Preserve filters, layout, and keyboard focus; offer a consistent retry action.
 - [x] Add save and completion confirmations; show save/delete failures inside the relevant dialog.
-- [ ] Refine remaining retry and empty-state feedback.
-- Refine dialog entrances and exits using the existing dialog primitives.
+- [x] Refine retry and empty-state feedback with Add, Clear filters, and View all actions. Do not report failed initial requests as empty lists.
+- [x] Refine dialog entrances and exits using the existing dialog primitives. Respect reduced motion and restore focus to the opener or a useful Add control after deletion.
 
 Done when: slow connections and failed requests have clear feedback without unnecessary layout jumps, repeated announcements, or blocked interaction.
+
+Verification: 73 tests cover initial loading, retained refresh and retries, filter/layout preservation, stale request protection, account changes, empty-state actions, and dialog focus. Lint, type checking, and the production build passed. Full browser acceptance and screen-reader checks remain pending; see TEST_PLAN.md for focused smoke results.
 
 ## Milestone 4 — Mobile and accessibility polish
 

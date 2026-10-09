@@ -42,6 +42,111 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); });
 
+test.each([
+  ["inventory", () => <InventoryPageClient />],
+  ["tasks", () => <TasksPageClient />],
+  ["groceries", () => <GroceryList items={[]} userId="account" />],
+  ["restock page", () => <InventoryPageClient showGroceryList />],
+] as const)("%s shows skeletons during the initial request", async (_name, page) => {
+  const pending: Array<(value: unknown) => void> = [];
+  request.mockImplementation(() => new Promise((resolve) => { pending.push(resolve); }));
+  const { container } = render(page());
+  await waitFor(() => expect(pending.length).toBe(_name === "restock page" ? 2 : 1));
+  expect(container.querySelector('[data-slot="list-skeleton"]')).toBeInTheDocument();
+  expect(screen.getAllByRole("status").filter((status) => status.textContent?.includes("Loading"))).toHaveLength(1);
+  expect(screen.queryByText(/No inventory items|No tasks in this view|Nothing to buy yet/)).not.toBeInTheDocument();
+  request.mockImplementation(respond);
+  await act(async () => { pending.forEach((finish) => finish({ data: [], error: null })); });
+  await waitFor(() => expect(container.querySelector('[data-slot="list-skeleton"]')).not.toBeInTheDocument());
+});
+
+test("grocery refresh retains rows through a failed request and retry", async () => {
+  const user = userEvent.setup();
+  const { container } = render(<GroceryList items={[]} userId="account" />);
+  const checkbox = await screen.findByRole("checkbox", { name: /Milk/ });
+  let finish!: (value: unknown) => void;
+  request.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  await user.click(screen.getByRole("button", { name: "Refresh" }));
+  expect(screen.getByRole("checkbox", { name: /Milk/ })).toBe(checkbox);
+  expect(container.querySelector('[data-slot="list-skeleton"]')).not.toBeInTheDocument();
+  expect(screen.getByText("Refreshing your grocery list…").closest('[role="status"]')).toBeInTheDocument();
+  await act(async () => { finish({ data: null, error: { message: "Offline" } }); });
+  expect(screen.getByRole("alert")).toHaveTextContent("Your previous list is still shown");
+  expect(checkbox).toBeVisible();
+  expect(checkbox).toBeEnabled();
+  await user.click(screen.getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  expect(screen.getByRole("checkbox", { name: /Milk/ })).toBe(checkbox);
+});
+
+test("inventory refresh retains its filters, layout, rows and focus after a failure", async () => {
+  const user = userEvent.setup();
+  const { container } = render(<InventoryPageClient />);
+  const heading = await screen.findByRole("heading", { name: "Rice" });
+  await user.type(screen.getByRole("textbox", { name: "Search inventory" }), "Rice");
+  await user.click(screen.getByRole("button", { name: "Available" }));
+  await user.click(screen.getByRole("button", { name: "Compact: Three columns on wide screens" }));
+  let finish!: (value: unknown) => void;
+  request.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  const refresh = screen.getByRole("button", { name: "Refresh inventory" });
+  await user.click(refresh);
+  expect(refresh).toHaveFocus();
+  expect(refresh).toHaveAttribute("aria-disabled", "true");
+  expect(screen.getByRole("heading", { name: "Rice" })).toBe(heading);
+  expect(container.querySelector('[data-slot="list-skeleton"]')).not.toBeInTheDocument();
+  await act(async () => { finish({ data: null, error: { message: "Offline" } }); });
+  expect(screen.getByRole("alert")).toHaveTextContent("Your previous list is still shown");
+  expect(screen.getByRole("textbox", { name: "Search inventory" })).toHaveValue("Rice");
+  expect(screen.getByRole("button", { name: "Available" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("button", { name: "Compact: Three columns on wide screens" })).toHaveAttribute("aria-pressed", "true");
+  await user.click(screen.getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  expect(screen.getByRole("heading", { name: "Rice" })).toBe(heading);
+  expect(refresh).toHaveFocus();
+});
+
+test("inventory initial failure shows retry without claiming the inventory is empty", async () => {
+  const user = userEvent.setup();
+  request.mockRejectedValueOnce(new Error("Network unavailable"));
+  render(<InventoryPageClient />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("Network unavailable");
+  expect(screen.queryByText("No inventory items in this view.")).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Retry" }));
+  expect(await screen.findByRole("heading", { name: "Rice" })).toBeVisible();
+});
+
+test("inventory empty state clears filters and a known empty list stays visible during refresh", async () => {
+  const user = userEvent.setup();
+  const { container } = render(<InventoryPageClient />);
+  await screen.findByRole("heading", { name: "Rice" });
+  await user.type(screen.getByRole("textbox", { name: "Search inventory" }), "Missing");
+  await user.click(screen.getByRole("button", { name: "Clear filters" }));
+  expect(screen.getByRole("textbox", { name: "Search inventory" })).toHaveFocus();
+  expect(screen.getByRole("heading", { name: "Rice" })).toBeVisible();
+  request.mockResolvedValueOnce({ data: [], error: null });
+  await user.click(screen.getByRole("button", { name: "Refresh inventory" }));
+  await screen.findByRole("button", { name: "Add your first item" });
+  let finish!: (value: unknown) => void;
+  request.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  await user.click(screen.getByRole("button", { name: "Refresh inventory" }));
+  expect(screen.getByText("No inventory items in this view.")).toBeVisible();
+  expect(container.querySelector('[data-slot="list-skeleton"]')).not.toBeInTheDocument();
+  await act(async () => { finish({ data: [], error: null }); });
+});
+
+test("inventory dialog cancellation returns to its opener and deletion returns to Add item", async () => {
+  const user = userEvent.setup();
+  render(<InventoryPageClient />);
+  const remove = await screen.findByRole("button", { name: "Delete Rice" });
+  await user.click(remove);
+  await user.click(screen.getByRole("button", { name: "Cancel" }));
+  await waitFor(() => expect(remove).toHaveFocus());
+  await user.click(remove);
+  await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Add item" })).toHaveFocus());
+  expect(screen.queryByRole("heading", { name: "Rice" })).not.toBeInTheDocument();
+});
+
 test("announces task completion only after persistence and restores focus when its row disappears", async () => {
   const user = userEvent.setup();
   let finish!: (value: unknown) => void;

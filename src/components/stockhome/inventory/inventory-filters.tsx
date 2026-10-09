@@ -55,6 +55,8 @@ export function InventoryFilters({
       ) : null}
 
       <Input
+        id="inventory-search"
+        aria-label="Search inventory"
         value={searchQuery}
         placeholder="Search items"
         onChange={(event) => onSearchQueryChange(event.target.value)}
@@ -74,6 +76,7 @@ export function InventoryFilters({
                 statusFilterClassName(filterOption.value, isSelected),
               )}
               onClick={() => onStatusFilterToggle(filterOption.value)}
+              aria-pressed={isSelected}
             >
               {filterOption.label}
             </Button>
@@ -89,6 +92,7 @@ export function InventoryFilters({
             size="sm"
             className="h-9 shrink-0 px-3"
             onClick={() => onCategoryFilterChange(category)}
+            aria-pressed={categoryFilter === category}
           >
             {category}
           </Button>

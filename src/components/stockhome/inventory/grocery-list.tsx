@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { type FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ActionNotice } from "@/components/ui/action-notice";
@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingStatus } from "@/components/ui/loading-status";
+import { ListSkeleton } from "@/components/stockhome/list-skeleton";
+import { ListLoadFeedback } from "@/components/stockhome/list-load-feedback";
 import { supabase } from "@/lib/supabase";
 import type { InventoryItem } from "@/types";
 import { emptyGroceryForm, groceryListText, validateGroceryForm, type GroceryForm, type GroceryItem } from "./grocery-utils";
@@ -21,14 +23,22 @@ async function fetchGroceries(userId: string) {
   return result.data as GroceryItem[];
 }
 
-export function GroceryList({ items, userId }: { items: InventoryItem[]; userId: string }) {
+export function GroceryList({ items, userId, inventoryLoading = false, inventoryError = null, inventoryHasLoaded = true }: {
+  items: InventoryItem[];
+  userId: string;
+  inventoryLoading?: boolean;
+  inventoryError?: string | null;
+  inventoryHasLoaded?: boolean;
+}) {
   const [groceries, setGroceries] = useState<GroceryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const mutationLock = useRef(false);
+  const loadingLock = useRef(true);
   const requestId = useRef(0);
   const focusAfterUpdate = useRef<string | null>(null);
   const [form, setForm] = useState<GroceryForm>(emptyGroceryForm);
@@ -39,22 +49,29 @@ export function GroceryList({ items, userId }: { items: InventoryItem[]; userId:
 
   useLayoutEffect(() => {
     if (focusAfterUpdate.current) {
-      document.getElementById(focusAfterUpdate.current)?.focus();
+      (document.getElementById(focusAfterUpdate.current) ?? document.getElementById("add-grocery-item"))?.focus();
       focusAfterUpdate.current = null;
     }
   }, [groceries]);
 
   const load = useCallback(() => {
+    loadingLock.current = true;
     const request = ++requestId.current;
     return fetchGroceries(userId).then((data) => {
       if (request === requestId.current) {
+        const focused = document.activeElement;
+        if (focused instanceof HTMLElement && focused.dataset.groceryControl) focusAfterUpdate.current = focused.id;
         setGroceries(data);
+        setHasLoaded(true);
         setLoadError(null);
       }
     }).catch(() => {
       if (request === requestId.current) setLoadError("We couldn't load your grocery list. Please try again.");
     }).finally(() => {
-      if (request === requestId.current) setLoading(false);
+      if (request === requestId.current) {
+        loadingLock.current = false;
+        setLoading(false);
+      }
     });
   }, [userId]);
 
@@ -64,7 +81,7 @@ export function GroceryList({ items, userId }: { items: InventoryItem[]; userId:
   }, [load]);
 
   function refresh() {
-    if (mutationLock.current) return;
+    if (mutationLock.current || loadingLock.current) return;
     setLoading(true);
     setLoadError(null);
     setNotice("");
@@ -73,12 +90,13 @@ export function GroceryList({ items, userId }: { items: InventoryItem[]; userId:
 
   const pending = groceries.filter((item) => !item.is_purchased);
   const purchased = groceries.filter((item) => item.is_purchased);
-  const ready = !loading && !loadError && !busy;
+  const ready = hasLoaded && !loading && !busy;
   const suggestions = items.filter((item) => item.status !== "available" && !groceries.some((grocery) =>
     grocery.inventory_item_id === item.id || grocery.name.trim().toLowerCase() === item.name.trim().toLowerCase(),
   ));
 
   function openAdd(item?: InventoryItem) {
+    if (!ready || loadingLock.current || mutationLock.current) return;
     setEditing(null);
     setForm(item ? { inventory_item_id: item.id, name: item.name, quantity: "1", unit: item.unit ?? "" } : emptyGroceryForm);
     setFormError(null);
@@ -86,6 +104,7 @@ export function GroceryList({ items, userId }: { items: InventoryItem[]; userId:
   }
 
   function openEdit(item: GroceryItem) {
+    if (!ready || loadingLock.current || mutationLock.current) return;
     setEditing(item);
     setForm({ inventory_item_id: item.inventory_item_id ?? "", name: item.name, quantity: String(item.quantity), unit: item.unit });
     setFormError(null);
@@ -93,7 +112,7 @@ export function GroceryList({ items, userId }: { items: InventoryItem[]; userId:
   }
 
   function startMutation() {
-    if (mutationLock.current || !ready) return false;
+    if (mutationLock.current || loadingLock.current || !ready) return false;
     mutationLock.current = true;
     setBusy(true);
     setError(null);
@@ -157,6 +176,7 @@ export function GroceryList({ items, userId }: { items: InventoryItem[]; userId:
   }
 
   async function copyList() {
+    if (!ready || loadingLock.current || mutationLock.current) return;
     setError(null);
     setNotice("");
     try {
@@ -168,14 +188,14 @@ export function GroceryList({ items, userId }: { items: InventoryItem[]; userId:
   function renderItem(item: GroceryItem) {
     return (
       <li key={item.id} data-motion-id={item.id} className={`motion-list-item flex flex-wrap items-center gap-3 rounded-xl border p-4 ${item.is_purchased ? "bg-muted/70" : "bg-card"}`}>
-        <Checkbox className="motion-check" id={`grocery-${item.id}`} checked={item.is_purchased} disabled={!ready} onCheckedChange={(checked) => void toggle(item, checked === true)} />
+        <Checkbox className="motion-check" id={`grocery-${item.id}`} data-grocery-control="true" checked={item.is_purchased} disabled={busy} aria-disabled={!ready} onCheckedChange={(checked) => void toggle(item, checked === true)} />
         <label htmlFor={`grocery-${item.id}`} className="min-w-0 flex-1 cursor-pointer">
           <span className={`block break-words text-sm font-medium ${item.is_purchased ? "text-muted-foreground line-through" : ""}`}>{item.name}</span>
           <span className="text-xs text-muted-foreground">{item.is_purchased ? "Purchased" : "Buy"}: {item.quantity} {item.unit}</span>
         </label>
         <div className="flex gap-2">
-          <Button variant="ghost" size="sm" disabled={!ready} onClick={() => openEdit(item)} aria-label={`Edit ${item.name}`}>Edit</Button>
-          <Button variant="ghost" size="sm" disabled={!ready} onClick={() => { setError(null); setToRemove(item); }} aria-label={`Remove ${item.name}`}>Remove</Button>
+          <Button id={`edit-grocery-${item.id}`} data-grocery-control="true" variant="ghost" size="sm" disabled={busy} aria-disabled={!ready} onClick={() => openEdit(item)} aria-label={`Edit ${item.name}`}>Edit</Button>
+          <Button id={`remove-grocery-${item.id}`} data-grocery-control="true" variant="ghost" size="sm" disabled={busy} aria-disabled={!ready} onClick={() => { if (!ready || loadingLock.current || mutationLock.current) return; setError(null); setToRemove(item); }} aria-label={`Remove ${item.name}`}>Remove</Button>
         </div>
       </li>
     );
@@ -188,17 +208,18 @@ export function GroceryList({ items, userId }: { items: InventoryItem[]; userId:
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div><h2 className="text-lg font-semibold">Your grocery list</h2><p className="mt-1 text-sm text-muted-foreground">Plan what to buy, even when your shelves are full.</p></div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" disabled={!ready || pending.length === 0} onClick={() => void copyList()}>Copy remaining</Button>
-              <Button variant="outline" disabled={loading || busy} onClick={refresh}>Refresh</Button>
-              <Button disabled={!ready} onClick={() => openAdd()}>Add item</Button>
+              <Button variant="outline" disabled={!hasLoaded || busy || pending.length === 0} aria-disabled={!ready} onClick={() => void copyList()}>Copy remaining</Button>
+              <Button id="refresh-groceries" variant="outline" disabled={busy} aria-disabled={loading} onClick={refresh}>Refresh</Button>
+              <Button id="add-grocery-item" disabled={!hasLoaded || busy} aria-disabled={!ready} onClick={() => openAdd()}>Add item</Button>
             </div>
           </div>
-          {loading ? <LoadingStatus messageGroup="groceries" className="justify-start text-sm text-primary">Loading your list… making room for snacks.</LoadingStatus> : null}
-          {loadError ? <div role="alert" className="text-sm text-destructive">{loadError} <Button variant="link" onClick={refresh}>Retry</Button></div> : null}
+          {loading && !hasLoaded ? <LoadingStatus messageGroup="groceries" className="justify-start text-sm text-primary">Loading your list… making room for snacks.</LoadingStatus> : null}
+          {loading && !hasLoaded ? <ListSkeleton variant="groceries" /> : null}
+          <ListLoadFeedback loading={loading} hasLoaded={hasLoaded} error={loadError} label="grocery list" onRetry={refresh} retryDisabled={busy} retryFocusTarget="#refresh-groceries" />
           {error && !toRemove ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-          {!loading && !loadError ? <>
+          {hasLoaded ? <>
             <h3 className="text-sm font-semibold">To buy ({pending.length})</h3>
-            {pending.length ? <AnimatedList as="ul" className="grid gap-3">{pending.map(renderItem)}</AnimatedList> : <p className="rounded-xl bg-muted p-5 text-sm text-muted-foreground">Nothing to buy yet. Add an item or choose a restock suggestion below.</p>}
+            {pending.length ? <AnimatedList as="ul" className="grid gap-3">{pending.map(renderItem)}</AnimatedList> : <div className="grid justify-items-start gap-3 rounded-xl bg-muted p-5"><p className="text-sm text-muted-foreground">{purchased.length ? "Everything on your list is purchased. Add another item or uncheck a purchased item to buy it again." : "Nothing to buy yet. Add an item or choose a restock suggestion below."}</p><Button variant="outline" disabled={busy} aria-disabled={!ready} onClick={() => openAdd()}>Add a shopping item</Button></div>}
             {purchased.length > 0 ? <div className="grid gap-3"><h3 className="text-sm font-semibold">Purchased ({purchased.length})</h3><AnimatedList as="ul" className="grid gap-3">{purchased.map(renderItem)}</AnimatedList></div> : null}
             <p className="text-xs leading-5 text-muted-foreground">Your list is saved to your account. Checking an item marks it purchased; update its stock separately in Inventory.</p>
           </> : null}
@@ -207,12 +228,16 @@ export function GroceryList({ items, userId }: { items: InventoryItem[]; userId:
       <Card>
         <CardContent className="grid gap-4">
           <div><h2 className="text-lg font-semibold">Restock suggestions</h2><p className="mt-1 text-sm text-muted-foreground">Low-stock and unavailable items. You decide what goes on your list.</p></div>
-          {suggestions.length ? <AnimatedList as="ul" className="grid gap-3 sm:grid-cols-2">{suggestions.map((item) => <li key={item.id} data-motion-id={item.id} className="flex items-center justify-between gap-3 rounded-xl border p-4"><div className="min-w-0"><p className="break-words text-sm font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{statusLabels[item.status]} · At home: {item.quantity} {item.unit}</p></div><Button variant="secondary" size="sm" disabled={!ready} onClick={() => openAdd(item)} aria-label={`Add ${item.name} to grocery list`}>Add to list</Button></li>)}</AnimatedList> : <p className="text-sm text-muted-foreground">No additional restock suggestions. You can still add anything you need.</p>}
+          {!inventoryHasLoaded ? (
+            inventoryLoading ? <ListSkeleton variant="groceries" className="sm:grid-cols-2" /> : <p className="text-sm text-muted-foreground">{inventoryError ? "Restock suggestions are unavailable until your inventory loads. You can still add a shopping item above." : "Restock suggestions will appear when your inventory loads."}</p>
+          ) : !hasLoaded ? (
+            loading ? <ListSkeleton variant="groceries" className="sm:grid-cols-2" /> : <p className="text-sm text-muted-foreground">Restock suggestions will appear when your grocery list loads.</p>
+          ) : suggestions.length ? <AnimatedList as="ul" className="grid gap-3 sm:grid-cols-2">{suggestions.map((item) => <li key={item.id} data-motion-id={item.id} className="flex items-center justify-between gap-3 rounded-xl border p-4"><div className="min-w-0"><p className="break-words text-sm font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{statusLabels[item.status]} · At home: {item.quantity} {item.unit}</p></div><Button variant="secondary" size="sm" disabled={busy} aria-disabled={!ready} onClick={() => openAdd(item)} aria-label={`Add ${item.name} to grocery list`}>Add to list</Button></li>)}</AnimatedList> : <p className="text-sm text-muted-foreground">No additional restock suggestions. You can still add anything you need.</p>}
         </CardContent>
       </Card>
       <ActionNotice message={notice} onDismiss={() => setNotice("")} />
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!busy) setDialogOpen(open); }}>
-        <DialogContent>
+        <DialogContent returnFocusFallback="#add-grocery-item">
           <DialogHeader><DialogTitle>{editing ? "Edit shopping item" : "Add to your grocery list"}</DialogTitle><DialogDescription>Choose any item at home or add something new. Set the amount you want to buy.</DialogDescription></DialogHeader>
           <form onSubmit={save} className="grid gap-4" aria-busy={busy}>
             <fieldset disabled={busy} className="grid min-w-0 gap-4">
@@ -229,7 +254,7 @@ export function GroceryList({ items, userId }: { items: InventoryItem[]; userId:
         </DialogContent>
       </Dialog>
       <Dialog open={Boolean(toRemove)} onOpenChange={(open) => { if (!open && !busy) { setToRemove(null); setError(null); } }}>
-        <DialogContent><DialogHeader><DialogTitle>Remove {toRemove?.name}?</DialogTitle><DialogDescription>This removes it from your grocery list. Your inventory stays the same.</DialogDescription></DialogHeader>{error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}<DialogFooter><Button variant="outline" disabled={busy} onClick={() => { setToRemove(null); setError(null); }}>Cancel</Button><Button variant="destructive" disabled={busy} onClick={() => void remove()}>{busy ? <LoadingStatus>Removing…</LoadingStatus> : "Remove item"}</Button></DialogFooter></DialogContent>
+        <DialogContent returnFocusFallback="#add-grocery-item"><DialogHeader><DialogTitle>Remove {toRemove?.name}?</DialogTitle><DialogDescription>This removes it from your grocery list. Your inventory stays the same.</DialogDescription></DialogHeader>{error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}<DialogFooter><Button variant="outline" disabled={busy} onClick={() => { setToRemove(null); setError(null); }}>Cancel</Button><Button variant="destructive" disabled={busy} onClick={() => void remove()}>{busy ? <LoadingStatus>Removing…</LoadingStatus> : "Remove item"}</Button></DialogFooter></DialogContent>
       </Dialog>
     </div>
   );

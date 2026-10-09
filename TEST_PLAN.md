@@ -2,15 +2,27 @@
 
 Branch: `feat/ui-enhancements`
 
-Scope: dashboard data and graph, initial skeletons, retained dashboard refresh, action feedback, inventory/task/grocery list motion, keyboard focus, and reduced motion. List-page skeletons and smoother grocery refresh remain planned; they are not acceptance requirements for this iteration.
+Scope: dashboard data and graph, dashboard and list skeletons, retained list refresh and retries, useful empty states, dialog motion and focus return, action feedback, inventory/task/grocery list motion, keyboard focus, and reduced motion.
 
 ## Current verification status
 
-- The most recent implementation run passed 12 focused action-feedback, animated-list, and inventory-list tests, plus lint, type checking, and the production build.
+- The milestone 3 update passed 73 tests, lint, type checking, and the production build.
 - Dashboard loading, refresh, and graph tests passed during the preceding dashboard change.
 - Browser checks below are **pending**. Unit tests do not establish visual quality, real screen-reader behavior, or persistence against Supabase.
-- The complete suite has not been rerun for this documentation update.
+- Automated loading checks cover inventory layout skeletons, tasks, groceries, initial restock loading, and grocery refresh failure/retry with retained rows.
 - The clipboard-format assertion now matches the intended `[ ] Rice: 2 kg` checklist output.
+
+### Milestone 3 browser smoke results — 2026-10-09
+
+Headless Edge 154.0.4258.62, development server, 1280 × 900 and 390 × 900. All six page/viewport combinations passed: Inventory, Tasks, and Groceries/Restock at each width. Requests and authentication were mocked in an isolated browser profile; no live account records were changed.
+
+- Initial requests display skeletons without premature empty states.
+- Delayed and failed refreshes retain the same row elements and keyboard focus; Retry recovers.
+- Dialog entrances compute to 180 ms; Escape restores the opener, and successful deletion restores focus to the primary Add control.
+- With reduced motion enabled, the inventory dialog computes to no animation.
+- No horizontal page overflow was detected at either width.
+
+These focused checks cover milestone 3 UI behavior. They do not replace the full P0 persistence checks against Supabase, screen-reader review, or the milestone 4 mobile/accessibility audit below.
 
 ## Setup
 
@@ -102,6 +114,9 @@ Coverage is in:
 - `tests/dashboard.test.tsx`: paging, initial skeletons, retained refresh, graph filter persistence, request failures, account changes.
 - `tests/dashboard-stock-chart.test.tsx` and `tests/dashboard-utils.test.ts`: graph filtering, empty states, counts, dates, category grouping.
 - `tests/loading-status.test.tsx`: varied initial messages, rotation, timer cleanup.
+- `tests/tasks-loading.test.tsx`: retained refresh, retry, account changes, stale responses, empty-state actions, and dialog/refresh focus.
+- `tests/grocery-feedback.test.tsx`: retry focus, refresh guards and focus, empty-state actions, unavailable inventory suggestions, and deletion focus.
+- `tests/dialog.test.tsx`: latest opener restoration, removed/disabled opener fallback, and explicit focus overrides.
 
 These tests mock Supabase or exercise pure calculations. Run the P0 browser persistence checks against the test account as well.
 

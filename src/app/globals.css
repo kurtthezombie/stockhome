@@ -212,7 +212,43 @@
   to { opacity: 1; transform: scale(1); }
 }
 
+@keyframes stockhome-dialog-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes stockhome-dialog-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(4px) scale(0.97); }
+}
+
+@keyframes stockhome-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes stockhome-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 @media (prefers-reduced-motion: no-preference) {
+  [data-slot="dialog-content"][data-state="open"] {
+    animation: stockhome-dialog-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  [data-slot="dialog-content"][data-state="closed"] {
+    animation: stockhome-dialog-out 160ms ease-in both;
+  }
+
+  [data-slot="dialog-overlay"][data-state="open"] {
+    animation: stockhome-overlay-in 180ms ease-out both;
+  }
+
+  [data-slot="dialog-overlay"][data-state="closed"] {
+    animation: stockhome-overlay-out 160ms ease-in both;
+  }
+
   .motion-enter,
   .motion-stagger > * {
     animation: stockhome-enter 380ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
