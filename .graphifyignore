@@ -1,0 +1,13 @@
+# Pilot scope: application code, tests, and committed SQL migrations only.
+# Graphify also respects .gitignore. Keep generated data and secrets excluded.
+*
+!src/
+!src/**
+!tests/
+!tests/**
+!supabase/
+!supabase/migrations/
+!supabase/migrations/**
+.env*
+*.pem
+*.tsbuildinfo

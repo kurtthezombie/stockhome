@@ -5,8 +5,10 @@ import { Delete02Icon, Edit02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { Badge } from "@/components/ui/badge";
+import { AnimatedList } from "@/components/ui/animated-list";
 import { Button } from "@/components/ui/button";
 import { LoadingStatus } from "@/components/ui/loading-status";
+import { ListSkeleton } from "@/components/stockhome/list-skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import type { InventoryItem } from "@/types";
 import { cn } from "@/lib/utils";
@@ -70,6 +72,11 @@ function serverLayout(): InventoryLayout {
 
 type InventoryListProps = {
   isLoading: boolean;
+  hasLoaded?: boolean;
+  actionsDisabled?: boolean;
+  hasFilters?: boolean;
+  onAddItem?: () => void;
+  onClearFilters?: () => void;
   items: InventoryItem[];
   onDeleteItem: (item: InventoryItem) => void;
   onEditItem: (item: InventoryItem) => void;
@@ -77,6 +84,11 @@ type InventoryListProps = {
 
 export function InventoryList({
   isLoading,
+  hasLoaded = !isLoading,
+  actionsDisabled = false,
+  hasFilters = false,
+  onAddItem,
+  onClearFilters,
   items,
   onDeleteItem,
   onEditItem,
@@ -87,7 +99,7 @@ export function InventoryList({
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">{isLoading ? "Your inventory" : `${items.length} ${items.length === 1 ? "item" : "items"}`}</p>
+        <p className="text-sm text-muted-foreground">{!hasLoaded ? "Your inventory" : `${items.length} ${items.length === 1 ? "item" : "items"}`}</p>
         <div role="group" aria-label="Inventory layout" className="hidden items-center gap-1 rounded-xl border bg-card p-1 md:flex">
           {layoutOptions.map((option) => (
             <Button
@@ -112,13 +124,14 @@ export function InventoryList({
           ))}
         </div>
       </div>
-      <div className={cn("grid items-start gap-4", columns)}>
+      {isLoading && items.length === 0 ? <ListSkeleton variant="inventory" className={cn("gap-4", columns)} /> : null}
+      <AnimatedList data-inventory-list className={cn("grid items-start gap-4", columns)}>
         {items.map((item) => {
           const expiringSoon = isExpiringSoon(item.expiry_date);
           const notes = item.notes?.trim();
 
           return (
-            <Card key={item.id} className={itemCardClassName(item, expiringSoon)}>
+            <Card key={item.id} data-motion-id={item.id} className={cn("motion-list-item", itemCardClassName(item, expiringSoon))}>
               <CardContent className="grid gap-4">
                 <div className="grid gap-2">
                   <h2 className="min-w-0 break-words text-base font-semibold leading-6">
@@ -167,7 +180,8 @@ export function InventoryList({
                   <Button
                     variant="outline"
                     size="icon-lg"
-                    onClick={() => onEditItem(item)}
+                    aria-disabled={actionsDisabled}
+                    onClick={() => { if (!actionsDisabled) onEditItem(item); }}
                     aria-label={`Edit ${item.name} and view full notes`}
                     title={`Edit ${item.name}`}
                   >
@@ -177,7 +191,8 @@ export function InventoryList({
                     variant="ghost"
                     size="icon-lg"
                     className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    onClick={() => onDeleteItem(item)}
+                    aria-disabled={actionsDisabled}
+                    onClick={() => { if (!actionsDisabled) onDeleteItem(item); }}
                     aria-label={`Delete ${item.name}`}
                     title={`Delete ${item.name}`}
                   >
@@ -188,16 +203,20 @@ export function InventoryList({
             </Card>
           );
         })}
-        {!isLoading && items.length === 0 ? (
+        {hasLoaded && items.length === 0 ? (
           <Card className="col-span-full">
             <CardContent className="py-8 text-center text-muted-foreground">
               No inventory items in this view.
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                {hasFilters && onClearFilters ? <Button variant="outline" onClick={onClearFilters}>Clear filters</Button> : null}
+                {onAddItem ? <Button aria-disabled={actionsDisabled} onClick={() => { if (!actionsDisabled) onAddItem(); }}>{hasFilters ? "Add an item" : "Add your first item"}</Button> : null}
+              </div>
             </CardContent>
           </Card>
         ) : null}
-      </div>
+      </AnimatedList>
       {isLoading ? (
-        <LoadingStatus className="justify-start text-sm text-primary">Loading your stock… checking behind the pasta.</LoadingStatus>
+        <LoadingStatus messageGroup="inventory" className="justify-start text-sm text-primary">Loading your stock… checking behind the pasta.</LoadingStatus>
       ) : null}
     </>
   );

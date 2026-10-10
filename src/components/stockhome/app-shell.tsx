@@ -81,7 +81,7 @@ export function AppShell({ children }: AppShellProps) {
   if (isLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-muted/30 p-6">
-        <LoadingStatus className="text-sm text-primary">Loading your home… counting beans, literally.</LoadingStatus>
+        <LoadingStatus messageGroup="home" className="text-sm text-primary">Loading your home… counting beans, literally.</LoadingStatus>
       </main>
     );
   }

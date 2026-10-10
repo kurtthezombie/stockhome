@@ -3,9 +3,13 @@
 import { Add01Icon, Delete02Icon, Edit02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { User } from "@supabase/supabase-js";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { AppShell } from "@/components/stockhome/app-shell";
+import { ListSkeleton } from "@/components/stockhome/list-skeleton";
+import { ListLoadFeedback } from "@/components/stockhome/list-load-feedback";
+import { ActionNotice } from "@/components/ui/action-notice";
+import { AnimatedList } from "@/components/ui/animated-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingStatus } from "@/components/ui/loading-status";
@@ -39,6 +43,12 @@ const emptyForm: TaskForm = {
   due_date: "",
   notes: "",
 };
+
+function isRejectedSession(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const { name, status } = error as { name?: string; status?: number };
+  return name === "AuthSessionMissingError" || (typeof status === "number" && status >= 400 && status < 500 && status !== 429);
+}
 
 function getTaskDueState(task: Task) {
   if (task.is_done || !task.due_date) {
@@ -114,11 +124,51 @@ export function TasksPageClient() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isClearDialogOpen, setIsClearDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<TaskFilter>("todo");
+  const [notice, setNotice] = useState<string | null>(null);
+  const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
+  const mutationLock = useRef(false);
+  const loadLock = useRef(false);
+  const mounted = useRef(false);
+  const loadRequest = useRef(0);
+  const ownerId = useRef<string | null>(null);
+  const focusAfterLoad = useRef<HTMLElement | null>(null);
+  const focusAfterUpdate = useRef<string | null>(null);
+  const isBusy = isSaving || isDeleting || isClearing || updatingTaskId !== null;
+
+  useLayoutEffect(() => {
+    if (focusAfterUpdate.current) {
+      document.getElementById(focusAfterUpdate.current)?.focus();
+      focusAfterUpdate.current = null;
+    }
+  }, [tasks]);
+
+  useLayoutEffect(() => {
+    const previous = focusAfterLoad.current;
+    focusAfterLoad.current = null;
+    if (previous && (document.activeElement === previous || document.activeElement === document.body)) {
+      const fallback = document.getElementById(hasLoaded && user ? "add-task" : "refresh-tasks");
+      (previous.isConnected ? previous : fallback)?.focus({ preventScroll: true });
+    }
+  }, [tasks, hasLoaded, user]);
+
+  function startMutation() {
+    if (mutationLock.current) return false;
+    mutationLock.current = true;
+    // A list requested before this write must not replace the saved result.
+    loadRequest.current += 1;
+    loadLock.current = false;
+    setIsLoading(false);
+    setNotice(null);
+    setError(null);
+    return true;
+  }
 
   const taskCounts = useMemo(
     () => ({
@@ -141,40 +191,92 @@ export function TasksPageClient() {
     return tasks;
   }, [filter, tasks]);
 
-  async function loadTasks() {
-    setIsLoading(true);
-    setError(null);
-
-    const { data, error: loadError } = await supabase
-      .from("tasks")
-      .select("*")
-      .order("is_done", { ascending: true })
-      .order("due_date", { ascending: true, nullsFirst: false })
-      .order("created_at", { ascending: false });
-
-    if (loadError) {
-      setError(loadError.message);
-    } else {
+  const loadTasks = useCallback(async () => {
+    if (mutationLock.current || loadLock.current) return;
+    loadLock.current = true;
+    const request = ++loadRequest.current;
+    const isCurrent = () => mounted.current && request === loadRequest.current;
+    const rememberListFocus = () => {
+      const active = document.activeElement;
+      focusAfterLoad.current = active instanceof HTMLElement && active.closest("[data-task-list]") ? active : null;
+    };
+    const clearAccount = () => {
+      rememberListFocus();
+      ownerId.current = null;
+      setUser(null);
+      setTasks([]);
+      setHasLoaded(false);
+      setIsDialogOpen(false);
+      setIsDeleteDialogOpen(false);
+      setIsClearDialogOpen(false);
+      setForm(emptyForm);
+      setEditingTask(null);
+      setTaskToDelete(null);
+      setNotice(null);
+      setError(null);
+    };
+    let failureMessage = "We couldn't verify your account. Please try again.";
+    let checkingSession = true;
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (!isCurrent()) return;
+      if (authError) throw authError;
+      if (!authData.user) {
+        clearAccount();
+        failureMessage = "Please sign in again to load your tasks.";
+        throw new Error(failureMessage);
+      }
+      if (ownerId.current !== authData.user.id) clearAccount();
+      ownerId.current = authData.user.id;
+      setUser(authData.user);
+      checkingSession = false;
+      failureMessage = "We couldn't load your tasks. Please try again.";
+      const { data, error: requestError } = await supabase
+        .from("tasks")
+        .select("*")
+        .eq("user_id", authData.user.id)
+        .order("is_done", { ascending: true })
+        .order("due_date", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: false });
+      if (!isCurrent()) return;
+      if (requestError) throw requestError;
+      rememberListFocus();
       setTasks((data ?? []) as Task[]);
-    }
-
-    setIsLoading(false);
-  }
-
-  useEffect(() => {
-    async function loadUserAndTasks() {
-      const { data } = await supabase.auth.getUser();
-      setUser(data.user);
-
-      if (data.user) {
-        await loadTasks();
-      } else {
+      setHasLoaded(true);
+    } catch (error) {
+      if (!isCurrent()) return;
+      if (checkingSession && isRejectedSession(error)) {
+        clearAccount();
+        failureMessage = "Please sign in again to load your tasks.";
+      }
+      setLoadError(failureMessage);
+    } finally {
+      if (isCurrent()) {
+        loadLock.current = false;
         setIsLoading(false);
       }
     }
-
-    loadUserAndTasks();
   }, []);
+
+  function refreshTasks() {
+    if (loadLock.current || mutationLock.current) return;
+    setIsLoading(true);
+    setLoadError(null);
+    void loadTasks();
+  }
+
+  useEffect(() => {
+    mounted.current = true;
+    let active = true;
+    // Skip the discarded Strict Mode setup before starting an account request.
+    queueMicrotask(() => { if (active) void loadTasks(); });
+    return () => {
+      active = false;
+      mounted.current = false;
+      loadRequest.current += 1;
+      loadLock.current = false;
+    };
+  }, [loadTasks]);
 
   function openAddDialog() {
     setEditingTask(null);
@@ -201,9 +303,9 @@ export function TasksPageClient() {
       setError("You must be logged in to save tasks.");
       return;
     }
-
+    if (!form.title.trim()) { setError("Enter a task title."); return; }
+    if (!startMutation()) return;
     setIsSaving(true);
-    setError(null);
 
     const payload = {
       title: form.title.trim(),
@@ -211,45 +313,49 @@ export function TasksPageClient() {
       notes: form.notes.trim() || null,
     };
 
-    const result = editingTask
-      ? await supabase.from("tasks").update(payload).eq("id", editingTask.id)
-      : await supabase.from("tasks").insert({
-          ...payload,
-          is_done: false,
-          user_id: user.id,
-        });
-
-    setIsSaving(false);
-
-    if (result.error) {
-      setError(result.error.message);
-      return;
+    try {
+      const result = editingTask
+        ? await supabase.from("tasks").update(payload).eq("id", editingTask.id).eq("user_id", user.id).select().single()
+        : await supabase.from("tasks").insert({ ...payload, is_done: false, user_id: user.id }).select().single();
+      if (!mounted.current) return;
+      if (result.error) throw result.error;
+      const saved = result.data as Task;
+      setTasks((current) => editingTask ? current.map((task) => task.id === saved.id ? saved : task) : [saved, ...current]);
+      setNotice(`${saved.title} ${editingTask ? "updated" : "added to your tasks"}.`);
+      setIsDialogOpen(false);
+      setForm(emptyForm);
+      setEditingTask(null);
+    } catch {
+      if (mounted.current) setError("We couldn't save this task. Please try again.");
+    } finally {
+      if (mounted.current) setIsSaving(false);
+      mutationLock.current = false;
     }
-
-    setIsDialogOpen(false);
-    setForm(emptyForm);
-    setEditingTask(null);
-    await loadTasks();
   }
 
   async function toggleTask(task: Task) {
-    const { error: updateError } = await supabase
-      .from("tasks")
-      .update({ is_done: !task.is_done })
-      .eq("id", task.id);
-
-    if (updateError) {
-      setError(updateError.message);
-      return;
+    if (!user || !startMutation()) return;
+    const hadFocus = document.activeElement?.id === `task-${task.id}`;
+    setUpdatingTaskId(task.id);
+    try {
+      const result = await supabase.from("tasks").update({ is_done: !task.is_done })
+        .eq("id", task.id).eq("user_id", user.id).select().single();
+      if (!mounted.current) return;
+      if (result.error) throw result.error;
+      const saved = result.data as Task;
+      if (hadFocus && (document.activeElement?.id === `task-${task.id}` || document.activeElement === document.body)) {
+        const remaining = filteredTasks.filter((row) => row.id !== task.id);
+        const next = remaining[Math.min(filteredTasks.findIndex((row) => row.id === task.id), remaining.length - 1)];
+        focusAfterUpdate.current = filter === "all" ? `task-${task.id}` : next ? `task-${next.id}` : "add-task";
+      }
+      setTasks((current) => current.map((row) => row.id === task.id ? saved : row));
+      setNotice(saved.is_done ? `${saved.title} completed. One less thing to do.` : `${saved.title} is back on your to-do list.`);
+    } catch {
+      if (mounted.current) setError("We couldn't update this task. Your previous selection is unchanged. Please try again.");
+    } finally {
+      if (mounted.current) setUpdatingTaskId(null);
+      mutationLock.current = false;
     }
-
-    setTasks((currentTasks) =>
-      currentTasks.map((currentTask) =>
-        currentTask.id === task.id
-          ? { ...currentTask, is_done: !currentTask.is_done }
-          : currentTask,
-      ),
-    );
   }
 
   function openDeleteDialog(task: Task) {
@@ -259,51 +365,47 @@ export function TasksPageClient() {
   }
 
   async function deleteTask() {
-    if (!taskToDelete) {
+    if (!taskToDelete || !user || !startMutation()) {
       return;
     }
 
     setIsDeleting(true);
 
-    const { error: deleteError } = await supabase
-      .from("tasks")
-      .delete()
-      .eq("id", taskToDelete.id);
-
-    setIsDeleting(false);
-
-    if (deleteError) {
-      setError(deleteError.message);
-      return;
+    try {
+      const { error: deleteError } = await supabase.from("tasks").delete()
+        .eq("id", taskToDelete.id).eq("user_id", user.id).select("id").single();
+      if (!mounted.current) return;
+      if (deleteError) throw deleteError;
+      setTasks((current) => current.filter((task) => task.id !== taskToDelete.id));
+      setNotice(`${taskToDelete.title} deleted.`);
+      setTaskToDelete(null);
+      setIsDeleteDialogOpen(false);
+    } catch {
+      if (mounted.current) setError("We couldn't delete this task. Please try again.");
+    } finally {
+      if (mounted.current) setIsDeleting(false);
+      mutationLock.current = false;
     }
-
-    setTasks((currentTasks) =>
-      currentTasks.filter((currentTask) => currentTask.id !== taskToDelete.id),
-    );
-    setTaskToDelete(null);
-    setIsDeleteDialogOpen(false);
   }
 
   async function clearCompletedTasks() {
+    if (!user || !startMutation()) return;
     setIsClearing(true);
-    setError(null);
-
-    const { error: deleteError } = await supabase
-      .from("tasks")
-      .delete()
-      .eq("is_done", true);
-
-    setIsClearing(false);
-
-    if (deleteError) {
-      setError(deleteError.message);
-      return;
+    try {
+      const { data, error: deleteError } = await supabase.from("tasks").delete()
+        .eq("is_done", true).eq("user_id", user.id).select("id");
+      if (!mounted.current) return;
+      if (deleteError) throw deleteError;
+      const removed = new Set((data ?? []).map((task: { id: string }) => task.id));
+      setTasks((current) => current.filter((task) => !removed.has(task.id)));
+      setNotice(`${removed.size} completed ${removed.size === 1 ? "task" : "tasks"} cleared.`);
+      setIsClearDialogOpen(false);
+    } catch {
+      if (mounted.current) setError("We couldn't clear completed tasks. Please try again.");
+    } finally {
+      if (mounted.current) setIsClearing(false);
+      mutationLock.current = false;
     }
-
-    setTasks((currentTasks) =>
-      currentTasks.filter((currentTask) => !currentTask.is_done),
-    );
-    setIsClearDialogOpen(false);
   }
 
   return (
@@ -317,13 +419,20 @@ export function TasksPageClient() {
               Track household chores and small errands.
             </p>
           </div>
-          <Button className="h-10 px-4 text-sm" onClick={openAddDialog}>
-            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-            Add task
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button id="refresh-tasks" variant="outline" aria-disabled={isLoading || isBusy} className="h-10 px-4 text-sm" onClick={refreshTasks}>
+              Refresh tasks
+            </Button>
+            <Button id="add-task" disabled={isBusy || !hasLoaded || !user} className="h-10 px-4 text-sm" onClick={openAddDialog}>
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+              Add task
+            </Button>
+          </div>
         </div>
 
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {error && !isDialogOpen && !isDeleteDialogOpen && !isClearDialogOpen ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+        <ListLoadFeedback loading={isLoading} hasLoaded={hasLoaded} error={loadError} label="tasks" onRetry={refreshTasks} retryDisabled={isBusy} retryFocusTarget="#refresh-tasks" />
+        <ActionNotice message={notice} onDismiss={() => setNotice(null)} />
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Tabs
@@ -331,10 +440,10 @@ export function TasksPageClient() {
             onValueChange={(value) => setFilter(value as TaskFilter)}
           >
             <TabsList className="grid w-full grid-cols-3 sm:w-fit">
-              <TabsTrigger value="all">All {taskCounts.all}</TabsTrigger>
-              <TabsTrigger value="todo">Todo {taskCounts.todo}</TabsTrigger>
+              <TabsTrigger value="all">All {hasLoaded ? taskCounts.all : ""}</TabsTrigger>
+              <TabsTrigger value="todo">Todo {hasLoaded ? taskCounts.todo : ""}</TabsTrigger>
               <TabsTrigger value="completed">
-                Completed {taskCounts.completed}
+                Completed {hasLoaded ? taskCounts.completed : ""}
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -342,27 +451,33 @@ export function TasksPageClient() {
             <Button
               variant="destructive"
               className="h-10 px-4 text-sm sm:h-8 sm:text-xs"
-              onClick={() => setIsClearDialogOpen(true)}
+              disabled={isBusy}
+              onClick={() => { setError(null); setIsClearDialogOpen(true); }}
             >
               Clear completed
             </Button>
           ) : null}
         </div>
 
-        <div className="grid gap-3">
+        {isLoading && !hasLoaded ? <ListSkeleton variant="tasks" /> : null}
+        <AnimatedList data-task-list className="grid gap-3">
           {filteredTasks.map((task) => (
             <Card
               key={task.id}
+              data-motion-id={task.id}
               size="sm"
-              className={taskCardClassName(task)}
+              className={`motion-list-item ${taskCardClassName(task)}`}
             >
               <CardContent className="grid gap-3">
                 <div className="flex items-start gap-3">
                   <div className="pt-1">
                     <Checkbox
+                      id={`task-${task.id}`}
+                      className="motion-check"
+                      disabled={isBusy}
                       checked={task.is_done}
                       onCheckedChange={() => toggleTask(task)}
-                      aria-label={`Mark ${task.title} done`}
+                      aria-label={`Mark ${task.title} ${task.is_done ? "not done" : "done"}`}
                     />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -392,6 +507,7 @@ export function TasksPageClient() {
                     variant="outline"
                     size="icon-lg"
                     onClick={() => openEditDialog(task)}
+                    disabled={isBusy}
                     aria-label={`Edit ${task.title}`}
                     title="Edit"
                   >
@@ -401,6 +517,7 @@ export function TasksPageClient() {
                     variant="destructive"
                     size="icon-lg"
                     onClick={() => openDeleteDialog(task)}
+                    disabled={isBusy}
                     aria-label={`Delete ${task.title}`}
                     title="Delete"
                   >
@@ -410,21 +527,29 @@ export function TasksPageClient() {
               </CardContent>
             </Card>
           ))}
-          {!isLoading && filteredTasks.length === 0 ? (
+          {hasLoaded && filteredTasks.length === 0 ? (
             <Card className="bg-background">
-              <CardContent className="py-8 text-center text-muted-foreground">
-                No tasks in this view.
+              <CardContent className="grid justify-items-center gap-3 py-8 text-center">
+                <div className="grid gap-1">
+                  <p className="font-medium">{tasks.length === 0 ? "No tasks yet." : filter === "todo" ? "Your to-do list is clear." : "No completed tasks yet."}</p>
+                  <p className="text-muted-foreground">{tasks.length === 0 ? "Add a household chore or errand to get started." : filter === "todo" ? "Add a new task or review the ones you've finished." : "Completed chores and errands will appear here."}</p>
+                </div>
+                {tasks.length > 0 && filter !== "all" ? (
+                  <Button variant="outline" onClick={() => setFilter("all")}>View all tasks</Button>
+                ) : (
+                  <Button disabled={isBusy || !user} onClick={openAddDialog}>Add your first task</Button>
+                )}
               </CardContent>
             </Card>
           ) : null}
-        </div>
-        {isLoading ? (
-          <LoadingStatus className="justify-start text-sm text-primary">Loading tasks… the pantry won’t organize itself.</LoadingStatus>
+        </AnimatedList>
+        {isLoading && !hasLoaded ? (
+          <LoadingStatus messageGroup="tasks" className="justify-start text-sm text-primary">Loading tasks… the pantry won’t organize itself.</LoadingStatus>
         ) : null}
       </div>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!isSaving) setIsDialogOpen(open); }}>
+        <DialogContent returnFocusFallback="#add-task">
           <DialogHeader>
             <DialogTitle>{editingTask ? "Edit task" : "Add task"}</DialogTitle>
             <DialogDescription>
@@ -432,6 +557,7 @@ export function TasksPageClient() {
             </DialogDescription>
           </DialogHeader>
           <form className="grid gap-4" onSubmit={handleSubmit}>
+            <fieldset disabled={isSaving} className="grid min-w-0 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="task-title">Title</Label>
               <Input
@@ -473,11 +599,14 @@ export function TasksPageClient() {
                 }
               />
             </div>
+            </fieldset>
+            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsDialogOpen(false)}
+                disabled={isSaving}
               >
                 Cancel
               </Button>
@@ -489,19 +618,21 @@ export function TasksPageClient() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
+      <Dialog open={isDeleteDialogOpen} onOpenChange={(open) => { if (!isDeleting) setIsDeleteDialogOpen(open); }}>
+        <DialogContent returnFocusFallback="#add-task">
           <DialogHeader>
             <DialogTitle>Delete task?</DialogTitle>
             <DialogDescription>
               This will permanently remove {taskToDelete?.title ?? "this task"}.
             </DialogDescription>
           </DialogHeader>
+          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
               onClick={() => setIsDeleteDialogOpen(false)}
+              disabled={isDeleting}
             >
               Cancel
             </Button>
@@ -517,8 +648,8 @@ export function TasksPageClient() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isClearDialogOpen} onOpenChange={setIsClearDialogOpen}>
-        <DialogContent>
+      <Dialog open={isClearDialogOpen} onOpenChange={(open) => { if (!isClearing) setIsClearDialogOpen(open); }}>
+        <DialogContent returnFocusFallback="#add-task">
           <DialogHeader>
             <DialogTitle>Clear completed tasks?</DialogTitle>
             <DialogDescription>
@@ -526,11 +657,13 @@ export function TasksPageClient() {
               task{taskCounts.completed === 1 ? "" : "s"}.
             </DialogDescription>
           </DialogHeader>
+          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
               onClick={() => setIsClearDialogOpen(false)}
+              disabled={isClearing}
             >
               Cancel
             </Button>

@@ -39,7 +39,10 @@ test("remembers the selected inventory layout after remounting", async () => {
 });
 
 test("shows a loading message instead of an empty result during loading", () => {
-  render(<InventoryList items={[]} isLoading onEditItem={vi.fn()} onDeleteItem={vi.fn()} />);
+  window.localStorage.setItem("stockhome:inventory-layout", "compact");
+  const { container } = render(<InventoryList items={[]} isLoading onEditItem={vi.fn()} onDeleteItem={vi.fn()} />);
   expect(screen.getByRole("status")).toHaveTextContent("Loading your stock");
+  expect(container.querySelector('[data-slot="list-skeleton"]')).toHaveClass("lg:grid-cols-3");
+  expect(container.querySelector('[data-slot="list-skeleton"]')).toHaveAttribute("aria-hidden", "true");
   expect(screen.queryByText("No inventory items in this view.")).not.toBeInTheDocument();
 });
