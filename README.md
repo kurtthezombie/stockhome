@@ -20,7 +20,23 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Checks and tests
+
+```bash
+npm run lint        # ESLint: Next.js, React, and TypeScript rules
+npm run lint:fix    # Apply safe ESLint fixes
+npm run typecheck   # TypeScript checking
+npm test           # Run Vitest once
+npm run test:watch  # Rerun tests while editing
+```
+
+Vitest runs unit and React component tests in `tests/*.test.ts` and `tests/*.test.tsx`. React Testing Library provides user-facing queries and interactions; jest-dom adds DOM assertions. The setup supports the `@/` import alias and cleans up rendered components after each test. Utility tests can opt into the Node environment.
+
+These tests do not connect to Supabase. Database migration and account-isolation tests remain in `tests/grocery-db.test.sql`; see [database setup and verification](supabase/README.md). Authenticated browser workflows still need end-to-end testing.
+
 ## Learn More
+
+For optional local code relationship exploration, see the [Graphify pilot](GRAPHIFY.md).
 
 To learn more about Next.js, take a look at the following resources:
 

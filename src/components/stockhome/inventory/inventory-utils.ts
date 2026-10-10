@@ -78,7 +78,7 @@ export function itemCardClassName(
     return "bg-amber-50 ring-amber-200";
   }
 
-  return "bg-background";
+  return "bg-card";
 }
 
 export function statusFilterClassName(
@@ -106,6 +106,8 @@ export function validateInventoryForm(form: InventoryForm) {
 
   if (!form.name.trim()) {
     errors.name = "Enter an item name.";
+  } else if (form.name.trim().length > 80) {
+    errors.name = "Keep the item name under 80 characters.";
   }
 
   if (!quantity) {
@@ -122,6 +124,20 @@ export function validateInventoryForm(form: InventoryForm) {
 
   if (form.has_expiry_date && !form.expiry_date) {
     errors.expiry_date = "Choose an expiry date or turn this off.";
+  }
+
+  if (quantity && !form.unit.trim()) {
+    errors.unit = "Add a unit, like bottle, kg, or roll.";
+  } else if (form.unit.trim().length > 30) {
+    errors.unit = "Keep the unit under 30 characters.";
+  }
+
+  if (!form.category) {
+    errors.category = "Choose a category.";
+  }
+
+  if (form.notes.length > 300) {
+    errors.notes = "Keep notes under 300 characters.";
   }
 
   return errors;

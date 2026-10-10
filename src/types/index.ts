@@ -16,7 +16,7 @@ export type InventoryItem = {
   user_id: string;
   name: string;
   status: InventoryStatus;
-  quantity: number | null;
+  quantity: number;
   unit: string | null;
   expiry_date: string | null;
   category: string | null;
@@ -24,4 +24,3 @@ export type InventoryItem = {
   created_at: string;
   updated_at: string;
 };
-

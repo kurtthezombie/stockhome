@@ -1,16 +1,17 @@
-import {
-  ArrowDown01Icon,
-  ArrowUp01Icon,
-  Delete02Icon,
-  Edit02Icon,
-} from "@hugeicons/core-free-icons";
+"use client";
+
+import { useSyncExternalStore } from "react";
+import { Delete02Icon, Edit02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { Badge } from "@/components/ui/badge";
+import { AnimatedList } from "@/components/ui/animated-list";
 import { Button } from "@/components/ui/button";
+import { LoadingStatus } from "@/components/ui/loading-status";
+import { ListSkeleton } from "@/components/stockhome/list-skeleton";
 import { Card, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
 import type { InventoryItem } from "@/types";
+import { cn } from "@/lib/utils";
 
 import {
   isExpiringSoon,
@@ -19,149 +20,203 @@ import {
   statusVariant,
 } from "./inventory-utils";
 
+const layoutOptions = [
+  { value: "list", label: "List", description: "One column", columns: "grid-cols-1" },
+  { value: "grid", label: "Grid", description: "Two columns", columns: "grid-cols-1 md:grid-cols-2" },
+  { value: "compact", label: "Compact", description: "Three columns on wide screens", columns: "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" },
+] as const;
+
+type InventoryLayout = (typeof layoutOptions)[number]["value"];
+const layoutStorageKey = "stockhome:inventory-layout";
+const layoutChangeEvent = "stockhome:inventory-layout-change";
+let fallbackLayout: InventoryLayout = "grid";
+let storageUnavailable = false;
+
+function readLayout(): InventoryLayout {
+  if (storageUnavailable) return fallbackLayout;
+  try {
+    const saved = window.localStorage.getItem(layoutStorageKey);
+    return layoutOptions.find((option) => option.value === saved)?.value ?? "grid";
+  } catch {
+    return fallbackLayout;
+  }
+}
+
+function subscribeToLayout(onChange: () => void) {
+  function onStorage(event: StorageEvent) {
+    if (event.key === layoutStorageKey || event.key === null) onChange();
+  }
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(layoutChangeEvent, onChange);
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(layoutChangeEvent, onChange);
+  };
+}
+
+function saveLayout(layout: InventoryLayout) {
+  fallbackLayout = layout;
+  try {
+    window.localStorage.setItem(layoutStorageKey, layout);
+    storageUnavailable = false;
+  } catch {
+    // Keep the switch usable when browser storage is unavailable.
+    storageUnavailable = true;
+  }
+  window.dispatchEvent(new Event(layoutChangeEvent));
+}
+
+function serverLayout(): InventoryLayout {
+  return "grid";
+}
+
 type InventoryListProps = {
-  expandedItemId: string | null;
   isLoading: boolean;
+  hasLoaded?: boolean;
+  actionsDisabled?: boolean;
+  hasFilters?: boolean;
+  onAddItem?: () => void;
+  onClearFilters?: () => void;
   items: InventoryItem[];
   onDeleteItem: (item: InventoryItem) => void;
   onEditItem: (item: InventoryItem) => void;
-  onExpandedItemChange: (itemId: string | null) => void;
 };
 
 export function InventoryList({
-  expandedItemId,
   isLoading,
+  hasLoaded = !isLoading,
+  actionsDisabled = false,
+  hasFilters = false,
+  onAddItem,
+  onClearFilters,
   items,
   onDeleteItem,
   onEditItem,
-  onExpandedItemChange,
 }: InventoryListProps) {
+  const layout = useSyncExternalStore(subscribeToLayout, readLayout, serverLayout);
+  const columns = layoutOptions.find((option) => option.value === layout)!.columns;
+
   return (
     <>
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">{!hasLoaded ? "Your inventory" : `${items.length} ${items.length === 1 ? "item" : "items"}`}</p>
+        <div role="group" aria-label="Inventory layout" className="hidden items-center gap-1 rounded-xl border bg-card p-1 md:flex">
+          {layoutOptions.map((option) => (
+            <Button
+              key={option.value}
+              type="button"
+              size="icon-lg"
+              variant={layout === option.value ? "secondary" : "ghost"}
+              aria-pressed={layout === option.value}
+              aria-label={`${option.label}: ${option.description}`}
+              title={`${option.label}: ${option.description}`}
+              onClick={() => saveLayout(option.value)}
+            >
+              <span
+                aria-hidden="true"
+                className={cn("grid size-4 gap-0.5", option.value === "list" ? "grid-cols-1" : option.value === "grid" ? "grid-cols-2" : "grid-cols-3")}
+              >
+                {Array.from({ length: option.value === "list" ? 2 : option.value === "grid" ? 4 : 6 }, (_, index) => (
+                  <span key={index} className="rounded-[1px] border border-current" />
+                ))}
+              </span>
+            </Button>
+          ))}
+        </div>
+      </div>
+      {isLoading && items.length === 0 ? <ListSkeleton variant="inventory" className={cn("gap-4", columns)} /> : null}
+      <AnimatedList data-inventory-list className={cn("grid items-start gap-4", columns)}>
         {items.map((item) => {
           const expiringSoon = isExpiringSoon(item.expiry_date);
-          const isExpanded = expandedItemId === item.id;
-          const nextExpandedItemId = isExpanded ? null : item.id;
+          const notes = item.notes?.trim();
 
           return (
-            <Card
-              key={item.id}
-              size="sm"
-              className={cn(itemCardClassName(item, expiringSoon))}
-            >
-              <CardContent className="grid gap-3">
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 text-left"
-                    onClick={() => onExpandedItemChange(nextExpandedItemId)}
-                    aria-expanded={isExpanded}
-                  >
-                    <span className="block truncate text-sm font-semibold">
-                      {item.name}
-                    </span>
-                    <span className="mt-1 flex flex-wrap gap-2">
-                      <Badge variant={statusVariant(item.status)}>
-                        {statusLabels[item.status]}
-                      </Badge>
-                      {expiringSoon ? (
-                        <Badge variant="destructive">Expiring soon</Badge>
-                      ) : null}
-                    </span>
-                  </button>
-                  <div className="flex shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="icon-lg"
-                      onClick={() => onExpandedItemChange(nextExpandedItemId)}
-                      aria-label={
-                        isExpanded
-                          ? `Collapse ${item.name}`
-                          : `Expand ${item.name}`
-                      }
-                      title={isExpanded ? "Collapse" : "Expand"}
-                    >
-                      <HugeiconsIcon
-                        icon={isExpanded ? ArrowUp01Icon : ArrowDown01Icon}
-                        strokeWidth={2}
-                      />
-                    </Button>
+            <Card key={item.id} data-motion-id={item.id} className={cn("motion-list-item", itemCardClassName(item, expiringSoon))}>
+              <CardContent className="grid gap-4">
+                <div className="grid gap-2">
+                  <h2 className="min-w-0 break-words text-base font-semibold leading-6">
+                    {item.name}
+                  </h2>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant={statusVariant(item.status)}>
+                      {statusLabels[item.status]}
+                    </Badge>
+                    {expiringSoon ? (
+                      <Badge variant="destructive">Expiring soon</Badge>
+                    ) : null}
                   </div>
                 </div>
 
-                {isExpanded ? (
-                  <div className="grid gap-3 border-t pt-3 text-sm">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div>
-                        <p className="text-xs text-muted-foreground">
-                          Quantity
-                        </p>
-                        <p className="font-medium">
-                          {item.quantity ?? "-"} {item.unit ?? ""}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Expiry</p>
-                        <p className="font-medium">
-                          {item.expiry_date ?? "-"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">
-                          Category
-                        </p>
-                        <p className="font-medium">{item.category ?? "-"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Status</p>
-                        <p className="font-medium">
-                          {statusLabels[item.status]}
-                        </p>
-                      </div>
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t pt-4 text-sm">
+                  <div className="min-w-0">
+                    <dt className="text-xs text-muted-foreground">In stock</dt>
+                    <dd className="mt-1 break-words text-lg font-semibold">
+                      {item.quantity ?? "Not set"}
+                      {item.unit ? <span className="ml-1 text-sm font-normal text-muted-foreground">{item.unit}</span> : null}
+                    </dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-xs text-muted-foreground">Expiry</dt>
+                    <dd className="mt-1 font-medium">
+                      {item.expiry_date ? <time dateTime={item.expiry_date}>{item.expiry_date}</time> : "No expiry set"}
+                    </dd>
+                  </div>
+                  {item.category ? (
+                    <div className="col-span-2 min-w-0">
+                      <dt className="text-xs text-muted-foreground">Category</dt>
+                      <dd className="mt-1 break-words font-medium">{item.category}</dd>
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Notes</p>
-                      <p className="mt-1 whitespace-pre-wrap">
-                        {item.notes ?? "-"}
-                      </p>
-                    </div>
-                    <div className="flex justify-end gap-2 border-t pt-3">
-                      <Button
-                        variant="outline"
-                        size="icon-lg"
-                        onClick={() => onEditItem(item)}
-                        aria-label={`Edit ${item.name}`}
-                        title="Edit"
-                      >
-                        <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="icon-lg"
-                        onClick={() => onDeleteItem(item)}
-                        aria-label={`Delete ${item.name}`}
-                        title="Delete"
-                      >
-                        <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                      </Button>
-                    </div>
+                  ) : null}
+                </dl>
+
+                {notes ? (
+                  <div className="rounded-lg bg-background/60 px-3 py-2.5">
+                    <p className="text-xs text-muted-foreground">Notes</p>
+                    <p className="mt-1 line-clamp-2 break-words whitespace-pre-wrap text-sm leading-6">{notes}</p>
                   </div>
                 ) : null}
+
+                <div className="flex items-center justify-end gap-2 border-t pt-3">
+                  <Button
+                    variant="outline"
+                    size="icon-lg"
+                    aria-disabled={actionsDisabled}
+                    onClick={() => { if (!actionsDisabled) onEditItem(item); }}
+                    aria-label={`Edit ${item.name} and view full notes`}
+                    title={`Edit ${item.name}`}
+                  >
+                    <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-lg"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    aria-disabled={actionsDisabled}
+                    onClick={() => { if (!actionsDisabled) onDeleteItem(item); }}
+                    aria-label={`Delete ${item.name}`}
+                    title={`Delete ${item.name}`}
+                  >
+                    <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           );
         })}
-        {!isLoading && items.length === 0 ? (
-          <Card className="bg-background md:col-span-2">
+        {hasLoaded && items.length === 0 ? (
+          <Card className="col-span-full">
             <CardContent className="py-8 text-center text-muted-foreground">
               No inventory items in this view.
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                {hasFilters && onClearFilters ? <Button variant="outline" onClick={onClearFilters}>Clear filters</Button> : null}
+                {onAddItem ? <Button aria-disabled={actionsDisabled} onClick={() => { if (!actionsDisabled) onAddItem(); }}>{hasFilters ? "Add an item" : "Add your first item"}</Button> : null}
+              </div>
             </CardContent>
           </Card>
         ) : null}
-      </div>
+      </AnimatedList>
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading inventory...</p>
+        <LoadingStatus messageGroup="inventory" className="justify-start text-sm text-primary">Loading your stock… checking behind the pasta.</LoadingStatus>
       ) : null}
     </>
   );
