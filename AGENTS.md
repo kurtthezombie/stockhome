@@ -37,6 +37,7 @@ The current app calls Supabase from client features through `src/lib/supabase.ts
 ## Before editing
 
 - Read the full request, check the working tree, and identify affected features and shared components.
+- For unfamiliar features or changes spanning multiple components or database relationships, check Graphify first using the workflow below before broad source exploration. Small, clearly scoped edits can go directly to source.
 - Read similar implementations and reuse existing conventions, validators, types, and helpers before adding abstractions or dependencies.
 - Explain the intended change briefly. Ask for clarification when an unresolved requirement affects correctness; make routine implementation choices independently.
 - Keep changes scoped and preserve unrelated work. Avoid placeholders, speculative refactors, and unsolicited TODO comments.
@@ -107,8 +108,13 @@ npm.cmd run build
 - Do not manually edit generated artifacts such as `.next/`, `next-env.d.ts`, or `graphify-out/`; regenerate them with the owning tool when needed.
 - Keep `.graphify-venv/` and `graphify-out/` untracked. Update dependency manifests/lockfiles together when changing dependencies.
 
-## Optional Graphify workflow
+## Graphify workflow
 
-Follow `GRAPHIFY.md` for local setup, queries, and refreshing the graph. Use it to orient yourself around component and schema relationships, then verify conclusions against source and tests. Exact symbols or `path::symbol` queries are usually more useful than broad queries.
+For exploration that benefits from a relationship map, prioritize Graphify as the first navigation step. Follow `GRAPHIFY.md` for local setup, queries, and refreshing the graph.
+
+- Check whether the local Graphify environment and `graphify-out/graph.json` are available. When available, run the documented local extraction and clustering commands before querying to account for committed and uncommitted source changes; a matching commit alone does not establish freshness.
+- Start with exact symbols or `path::symbol` queries to locate related components, consumers, tests, and schema definitions. Narrow truncated results or increase the query budget as needed.
+- Inspect the returned source locations and relevant tests before making changes. Verify graph conclusions against current source; missing edges do not prove that a dependency or test is absent.
+- If Graphify is unavailable or refresh fails, proceed with `rg` and direct source inspection. Do not make Graphify installation or repair a prerequisite for unrelated work. Skip it for small, clearly scoped edits.
 
 The pilot indexes only `src/`, `tests/`, and SQL migrations using local extraction. Some test files and dynamic relationships are absent. Do not treat graph edges as proof of test coverage, runtime behavior, or authorization. Git hooks, assistant integration, and model-backed documentation processing are not part of the current setup.
