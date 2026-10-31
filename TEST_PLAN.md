@@ -1,5 +1,47 @@
 # UI enhancements test plan
 
+## Single-icon appearance toggle ? 2026-10-31
+
+Supersedes the two-button control below. Each appearance control is now one icon-only button: sun in Light, moon in Dark. Its accessible label describes the next action. System defaults, explicit-choice persistence, and tab synchronization are unchanged. The 13 theme tests cover one button, switching both directions with Enter/Space, and retaining focus.
+
+Verification: 86 tests and lint passed. All 18 mocked Edge page/theme/viewport combinations described below were repeated for the single toggle and passed, including exactly one visible icon per control, correct action labels, Space activation, visible focus, system defaults, saved preference after reload, and no page overflow or browser errors. Typecheck and build still fail on the existing missing Next.js exports; application compilation succeeds.
+
+## Two-choice appearance update — 2026-10-31
+
+The appearance control now exposes only sun/Light and moon/Dark buttons, with accessible names and pressed states. There is no System option or dropdown. With no explicit saved choice, the selected button follows the current device appearance. An explicit click persists that choice, including when it already matches the system. Previously stored `system` preferences still resolve to the device appearance.
+
+- `npm.cmd test`: 86 tests passed across 14 files, including 13 theme tests. Tests cover the resolved selected state, live system changes before a choice, persistence, synchronized controls, storage events/failures, keyboard activation, and bootstrap behavior.
+- `npm.cmd run lint`: passed.
+- Type checking and production build were retried: the same missing Next.js exports still block validation. The application compiled before build-time type validation failed.
+- The earlier dropdown-specific browser checks below describe the previous revision, not this control.
+- Headless Edge 156.0.4314.58, development server, mocked authentication/data: all 18 combinations of Dashboard/Settings/Login × Light/Dark × 320/390/1280-pixel widths passed. Checked selected icon states, system Light/Dark defaults, saved override after reload, Space-key activation and visible focus, native color scheme, and no horizontal page overflow. No browser errors were reported. Reduced motion was emulated. No live Supabase writes were performed.
+
+## Appearance verification — 2026-10-31
+
+Revision: working changes on `develop`, based on `ec2be08`. Graphify extraction and clustering were refreshed before source exploration; CSS was reviewed directly because Graphify does not index it.
+
+- `npm.cmd test`: **85 tests passed across 14 files**, including 12 new theme tests.
+- Theme tests cover system defaults, live device changes, persistent overrides, synchronized controls, cross-tab storage updates/clearing, invalid preferences, blocked storage, listener cleanup, and the pre-paint bootstrap.
+- `npm.cmd run lint`: passed.
+- `npm.cmd run typecheck`: blocked by the installed Next.js 16.4.0 package: `node_modules/next/dist/types.d.ts` is empty. Missing exports include `Metadata`, `NextConfig`, `ResolvingMetadata`, and `ResolvingViewport`.
+- `npm.cmd run build`: application compilation succeeded; the build failed during TypeScript validation with the same missing Next.js exports. Regenerating route types did not resolve the missing dependency declarations. No type checks were disabled and no dependencies were changed.
+- The initial Turbopack development launch also failed reading its local persistence cache. Browser verification used `next dev --webpack` instead; this is not production-build verification.
+
+Browser: headless Edge 156.0.4314.58, isolated profile, 390 × 900 and 1280 × 900, with reduced motion emulated. Authentication and Supabase responses were mocked; no live database records were written.
+
+| Check | Result |
+| --- | --- |
+| Dashboard, Inventory, Tasks, Groceries, Settings, Login, Register in Light and Dark at both widths | 28 combinations passed: expected theme, native color scheme, page background, and no horizontal page overflow. |
+| New visit follows dark system preference | Passed. |
+| Explicit Light overrides dark system and survives reload | Passed. |
+| Returning to System follows subsequent device changes | Passed. |
+| Keyboard ArrowUp changes the focused appearance selector | Passed. |
+| Browser exceptions and console errors during the completed smoke run | None, including no reported hydration errors. |
+| Dark screenshots: desktop Dashboard, mobile Inventory, mobile Login | Reviewed: readable surfaces, controls, status highlighting, and logo. |
+| Sampled contrast: dark body, muted text on cards, primary buttons, secondary text, error text | 7.40:1–15.05:1; these samples are not a complete contrast audit. |
+
+Remaining: repair the local Next.js installation and repeat type checking, production build, and production-browser verification. Screen-reader review, comprehensive contrast/focus auditing, and visual measurement of first-paint flash remain pending. Cross-tab and blocked-storage behavior are unit-tested, not separately verified in a real browser. Earlier UI acceptance items below retain their existing status.
+
 Branch: `feat/ui-enhancements`
 
 Scope: dashboard data and graph, dashboard and list skeletons, retained list refresh and retries, useful empty states, dialog motion and focus return, action feedback, inventory/task/grocery list motion, keyboard focus, and reduced motion.

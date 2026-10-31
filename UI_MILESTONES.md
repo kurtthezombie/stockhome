@@ -60,6 +60,16 @@ Status: planned.
 
 Done when: core workflows have been checked on desktop and narrow mobile layouts with pointer, touch, keyboard, and reduced-motion settings.
 
+## Appearance — system, light, and dark
+
+Status: implemented; unit tests, lint, and development-browser smoke checks passed. Production validation is blocked by the local Next.js installation; see TEST_PLAN.md.
+
+- With no saved choice, the current system appearance determines whether the toggle shows a sun or moon. Live device changes are followed until the user makes an explicit choice.
+- A single icon button toggles Light/Dark in the header, Settings, and authentication pages. It shows a sun in Light and a moon in Dark, with an accessible label describing the next action. Explicit choices persist in this browser and synchronize across tabs.
+- A static bootstrap applies the theme before paint. The shared controller handles hydration, storage failures, and listener cleanup without adding dependencies.
+- Dark surfaces retain the mint-and-teal identity, including forms, status highlights, charts, dialogs, and logo visibility.
+- Browser smoke checks covered all seven pages at 390 and 1280 pixels wide with mocked authentication/data. Full screen-reader and production acceptance remain pending.
+
 ## Motion guidelines
 
 - Prefer short opacity and transform animations; avoid moving surrounding layout.

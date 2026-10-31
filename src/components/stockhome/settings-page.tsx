@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { AppShell } from "@/components/stockhome/app-shell";
 import { BackupControls } from "@/components/stockhome/backup-controls";
+import { ThemeControl } from "@/components/ui/theme-control";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,7 +39,7 @@ export function SettingsPageClient() {
           <p className="page-eyebrow">Make yourself at home</p>
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
           <p className="text-sm text-muted-foreground">
-            Your account and a few things to look forward to.
+            Your account, appearance, and household data.
           </p>
         </div>
 
@@ -78,9 +79,7 @@ export function SettingsPageClient() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-xs text-muted-foreground">
-                More ways to personalize your home are coming soon.
-              </p>
+              <ThemeControl />
             </CardContent>
           </Card>
 

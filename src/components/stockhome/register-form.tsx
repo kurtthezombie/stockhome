@@ -77,7 +77,7 @@ export function RegisterForm() {
   return (
     <AuthLayout title={needsConfirmation ? "Check your inbox." : "Make yourself at home."} description={needsConfirmation ? "You’re one step away from a more organized everyday." : "Create your account and bring a little calm to your household."}>
           {needsConfirmation ? (
-            <p role="status" className="rounded-2xl border border-[#cbe4dd] bg-[#edf7f3] p-5 text-sm leading-7 text-[#35645a]">
+            <p role="status" className="rounded-2xl border border-border bg-secondary p-5 text-sm leading-7 text-secondary-foreground">
               Check your email for a confirmation link before logging in. If you
               already have an account, you can log in below.
             </p>

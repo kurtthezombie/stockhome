@@ -18,6 +18,15 @@ Remaining work, ordered by priority. See [UI milestones](UI_MILESTONES.md) for a
 - [x] Polish dialog entrance and exit animations with reduced-motion support.
 - [x] Verify focus returns to a useful control when dialogs close, including after deletion.
 
+## Appearance
+
+- [x] Use one sun/moon icon button to toggle Light/Dark; start with the system appearance.
+- [x] Persist explicit choices, synchronize tabs, and follow system changes while no choice is saved.
+- [x] Apply appearance before paint and support blocked browser storage.
+- [x] Adapt shared surfaces, authentication, forms, status colors, and logos.
+- [x] Verify theme behavior with 13 tests; see TEST_PLAN.md for browser results.
+- [ ] Resolve the local Next.js declaration/cache issues and repeat production validation; see TEST_PLAN.md.
+
 ## Next: mobile and accessibility
 
 - [ ] Review mobile card spacing, touch targets, and long text.
@@ -32,6 +41,6 @@ Remaining work, ordered by priority. See [UI milestones](UI_MILESTONES.md) for a
 - [ ] Complete the pending browser checks in [TEST_PLAN.md](TEST_PLAN.md).
 - [x] Run the full test suite: `npm.cmd test`.
 - [x] Run lint: `npm.cmd run lint`.
-- [x] Run type checking: `npm.cmd run typecheck`.
-- [x] Run the production build: `npm.cmd run build`.
+- [ ] Pass type checking: `npm.cmd run typecheck` (blocked by empty Next.js dependency declarations).
+- [ ] Pass the production build: `npm.cmd run build` (compiles, then fails on the same dependency declarations).
 - [x] Record results and update milestone statuses for the final revision.

@@ -75,7 +75,7 @@ export function itemCardClassName(
   }
 
   if (item.status === "low_stock") {
-    return "bg-amber-50 ring-amber-200";
+    return "bg-amber-50 ring-amber-200 dark:bg-amber-400/10 dark:ring-amber-400/30";
   }
 
   return "bg-card";
@@ -90,11 +90,11 @@ export function statusFilterClassName(
   }
 
   if (status === "available") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100";
+    return "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-300 dark:hover:bg-emerald-400/20";
   }
 
   if (status === "low_stock") {
-    return "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100";
+    return "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300 dark:hover:bg-amber-400/20";
   }
 
   return "border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/15";

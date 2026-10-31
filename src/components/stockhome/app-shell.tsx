@@ -8,6 +8,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import type { Session } from "@supabase/supabase-js";
 import { useEffect, useState } from "react";
 
+import { ThemeControl } from "@/components/ui/theme-control";
 import { Button } from "@/components/ui/button";
 import { LoadingStatus } from "@/components/ui/loading-status";
 import {
@@ -92,14 +93,14 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="min-h-dvh bg-background">
-      <header className="border-b border-border/80 bg-white">
+      <header className="border-b border-border/80 bg-card">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div>
             <Link href="/" aria-label="StockHome dashboard" className="block rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
-              <Image src="/logo.png" alt="StockHome" width={2172} height={724} preload className="-ml-4 h-auto w-52" />
+              <Image src="/logo.png" alt="StockHome" width={2172} height={724} preload className="stockhome-logo -ml-4 h-auto w-32 sm:w-52" />
             </Link>
           </div>
-          <nav aria-label="Main navigation" className="hidden items-center gap-1 md:flex">
+          <nav aria-label="Main navigation" className="hidden items-center gap-1 lg:flex">
             {navItems.map((item) => (
               <Button
                 key={item.href}
@@ -116,12 +117,13 @@ export function AppShell({ children }: AppShellProps) {
             </Button>
           </nav>
 
+          <ThemeControl compact />
           <Dialog open={isMenuOpen} onOpenChange={setIsMenuOpen}>
             <DialogTrigger asChild>
               <Button
                 variant="outline"
                 size="icon-lg"
-                className="md:hidden"
+                className="lg:hidden"
                 aria-label="Open navigation menu"
               >
                 <HugeiconsIcon icon={Menu01Icon} strokeWidth={2} />

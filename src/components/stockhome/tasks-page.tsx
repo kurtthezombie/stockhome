@@ -90,7 +90,7 @@ function taskCardClassName(task: Task) {
   }
 
   if (dueState === "today" || dueState === "soon") {
-    return "bg-amber-50 ring-amber-200";
+    return "bg-amber-50 ring-amber-200 dark:bg-amber-400/10 dark:ring-amber-400/30";
   }
 
   return "bg-card";
