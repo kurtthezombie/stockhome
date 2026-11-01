@@ -16,6 +16,7 @@ vi.mock("@/lib/supabase", () => ({ supabase: {
     const builder = {
       select: () => builder,
       order: () => builder,
+      range: () => builder,
       eq: (key: string, value: unknown) => { args.filters[key] = value; return builder; },
       insert: (payload: Record<string, unknown>) => { args.operation = "insert"; args.payload = payload; return builder; },
       update: (payload: Record<string, unknown>) => { args.operation = "update"; args.payload = payload; return builder; },

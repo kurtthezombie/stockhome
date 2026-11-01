@@ -15,6 +15,7 @@ vi.mock("@/lib/supabase", () => ({ supabase: {
     const builder = {
       select: () => builder,
       order: () => builder,
+      range: () => builder,
       eq: (key: string, value: unknown) => { args.filters[key] = value; return builder; },
       insert: (payload: Record<string, unknown>) => { args.operation = "insert"; args.payload = payload; return builder; },
       update: (payload: Record<string, unknown>) => { args.operation = "update"; args.payload = payload; return builder; },
@@ -109,7 +110,8 @@ test("inventory initial failure shows retry without claiming the inventory is em
   const user = userEvent.setup();
   request.mockRejectedValueOnce(new Error("Network unavailable"));
   render(<InventoryPageClient />);
-  expect(await screen.findByRole("alert")).toHaveTextContent("Network unavailable");
+  expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't load the complete list. Please try again.");
+  expect(document.body).not.toHaveTextContent("Network unavailable");
   expect(screen.queryByText("No inventory items in this view.")).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Retry" }));
   expect(await screen.findByRole("heading", { name: "Rice" })).toBeVisible();

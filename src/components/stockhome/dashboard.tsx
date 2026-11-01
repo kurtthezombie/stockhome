@@ -13,19 +13,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { LoadingStatus } from "@/components/ui/loading-status";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/lib/supabase";
+import { loadAllPages } from "@/lib/pagination";
 import type { InventoryItem, Task } from "@/types";
 
 // Read all pages so dashboard counts do not stop at the API's row limit.
 async function loadRows<T>(table: "tasks" | "inventory_items" | "grocery_items", userId: string): Promise<T[]> {
-  const rows: T[] = [];
-  const pageSize = 500;
-  for (let offset = 0; ; offset += pageSize) {
-    const { data, error } = await supabase.from(table).select("*").eq("user_id", userId)
-      .order("id", { ascending: true }).range(offset, offset + pageSize - 1);
-    if (error) throw error;
-    rows.push(...(data ?? []) as T[]);
-    if (!data || data.length < pageSize) return rows;
-  }
+  return loadAllPages<T>((from, to) => supabase.from(table)
+    .select("*", { count: from === 0 ? "exact" : undefined }).eq("user_id", userId)
+    .order("id", { ascending: true }).range(from, to));
 }
 
 function dueLabel(date: string, today: string) {

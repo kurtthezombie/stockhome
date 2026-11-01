@@ -86,6 +86,7 @@ export function ThemeControl({ compact = false }: { compact?: boolean }) {
         type="button"
         size="icon-lg"
         variant="outline"
+        className="cursor-pointer"
         aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
         title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
         onClick={() => setTheme(getSnapshot() === "dark" ? "light" : "dark")}

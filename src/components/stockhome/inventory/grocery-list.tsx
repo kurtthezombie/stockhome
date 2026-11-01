@@ -13,14 +13,15 @@ import { LoadingStatus } from "@/components/ui/loading-status";
 import { ListSkeleton } from "@/components/stockhome/list-skeleton";
 import { ListLoadFeedback } from "@/components/stockhome/list-load-feedback";
 import { supabase } from "@/lib/supabase";
+import { loadAllPages } from "@/lib/pagination";
 import type { InventoryItem } from "@/types";
 import { emptyGroceryForm, groceryListText, validateGroceryForm, type GroceryForm, type GroceryItem } from "./grocery-utils";
 import { statusLabels } from "./inventory-utils";
 
 async function fetchGroceries(userId: string) {
-  const result = await supabase.from("grocery_items").select("*").eq("user_id", userId).order("created_at", { ascending: true });
-  if (result.error) throw result.error;
-  return result.data as GroceryItem[];
+  return loadAllPages<GroceryItem>((from, to) => supabase.from("grocery_items")
+    .select("*", { count: from === 0 ? "exact" : undefined }).eq("user_id", userId)
+    .order("created_at", { ascending: true }).order("id", { ascending: true }).range(from, to));
 }
 
 export function GroceryList({ items, userId, inventoryLoading = false, inventoryError = null, inventoryHasLoaded = true }: {

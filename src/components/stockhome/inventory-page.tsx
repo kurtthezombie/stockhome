@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { ActionNotice } from "@/components/ui/action-notice";
 import { LoadingStatus } from "@/components/ui/loading-status";
 import { supabase } from "@/lib/supabase";
+import { loadAllPages } from "@/lib/pagination";
 import type { InventoryItem } from "@/types";
 
 export function InventoryPageClient({
@@ -134,15 +135,16 @@ export function InventoryPageClient({
       }
       ownerId.current = auth.user.id;
       setUser(auth.user);
-      const { data, error } = await supabase.from("inventory_items").select("*").eq("user_id", auth.user.id)
+      const data = await loadAllPages<InventoryItem>((from, to) => supabase.from("inventory_items")
+        .select("*", { count: from === 0 ? "exact" : undefined }).eq("user_id", auth.user.id)
         .order("status", { ascending: true })
         .order("expiry_date", { ascending: true, nullsFirst: false })
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true }).range(from, to));
       if (request !== requestId.current) return;
-      if (error) throw new Error("We couldn't load your inventory. Please try again.");
       const active = document.activeElement;
       focusAfterLoad.current = active instanceof HTMLElement && active.closest("[data-inventory-list]") ? active : null;
-      setItems((data ?? []) as InventoryItem[]);
+      setItems(data);
       setHasLoaded(true);
     } catch (error) {
       if (request === requestId.current) setLoadError(error instanceof Error ? error.message : "We couldn't load your inventory. Please try again.");

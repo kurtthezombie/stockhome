@@ -3,12 +3,13 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { Logout01Icon, Menu01Icon } from "@hugeicons/core-free-icons";
+import { Menu01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { Session } from "@supabase/supabase-js";
 import { useEffect, useState } from "react";
 
 import { ThemeControl } from "@/components/ui/theme-control";
+import { AccountMenu } from "@/components/stockhome/account-menu";
 import { Button } from "@/components/ui/button";
 import { LoadingStatus } from "@/components/ui/loading-status";
 import {
@@ -27,7 +28,6 @@ const navItems = [
   { href: "/tasks", label: "Tasks" },
   { href: "/inventory", label: "Inventory" },
   { href: "/inventory/restock", label: "Groceries" },
-  { href: "/settings", label: "Settings" },
 ];
 
 type AppShellProps = {
@@ -73,12 +73,6 @@ export function AppShell({ children }: AppShellProps) {
     };
   }, [router]);
 
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    setIsMenuOpen(false);
-    router.replace("/login");
-  }
-
   if (isLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-muted/30 p-6">
@@ -111,60 +105,51 @@ export function AppShell({ children }: AppShellProps) {
                 <Link href={item.href} aria-current={pathname === item.href ? "page" : undefined}>{item.label}</Link>
               </Button>
             ))}
-            <Button variant="outline" className="ml-3 h-10" onClick={handleLogout}>
-              <HugeiconsIcon icon={Logout01Icon} strokeWidth={2} />
-              Logout
-            </Button>
           </nav>
 
-          <ThemeControl compact />
-          <Dialog open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-            <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon-lg"
-                className="lg:hidden"
-                aria-label="Open navigation menu"
-              >
-                <HugeiconsIcon icon={Menu01Icon} strokeWidth={2} />
-              </Button>
-            </DialogTrigger>
-            <DialogContent
-              className="top-0 left-0 h-dvh max-w-72 translate-x-0 translate-y-0 content-start rounded-none p-0 sm:max-w-80"
-              showCloseButton={false}
-            >
-              <DialogHeader className="border-b bg-secondary px-5 py-6">
-                <DialogTitle className="text-base">StockHome</DialogTitle>
-                <p className="truncate text-xs text-muted-foreground">
-                  {session.user.email}
-                </p>
-              </DialogHeader>
-              <nav aria-label="Mobile navigation" className="grid gap-2 p-4">
-                {navItems.map((item) => (
-                  <DialogClose key={item.href} asChild>
-                    <Button
-                      asChild
-                      variant={pathname === item.href ? "secondary" : "ghost"}
-                      className={cn(
-                        "h-11 justify-start px-3 text-sm",
-                        pathname === item.href && "font-semibold",
-                      )}
-                    >
-                      <Link href={item.href} aria-current={pathname === item.href ? "page" : undefined}>{item.label}</Link>
-                    </Button>
-                  </DialogClose>
-                ))}
+          <div className="flex shrink-0 items-center gap-2">
+            <ThemeControl compact />
+            <AccountMenu />
+            <Dialog open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+              <DialogTrigger asChild>
                 <Button
                   variant="outline"
-                  className="mt-2 h-11 justify-start px-3 text-sm"
-                  onClick={handleLogout}
+                  size="icon-lg"
+                  className="lg:hidden"
+                  aria-label="Open navigation menu"
                 >
-                  <HugeiconsIcon icon={Logout01Icon} strokeWidth={2} />
-                  Logout
+                  <HugeiconsIcon icon={Menu01Icon} strokeWidth={2} />
                 </Button>
-              </nav>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent
+                className="top-0 left-0 h-dvh max-w-72 translate-x-0 translate-y-0 content-start rounded-none p-0 sm:max-w-80"
+                showCloseButton={false}
+              >
+                <DialogHeader className="border-b bg-secondary px-5 py-6">
+                  <DialogTitle className="text-base">StockHome</DialogTitle>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {session.user.email}
+                  </p>
+                </DialogHeader>
+                <nav aria-label="Mobile navigation" className="grid gap-2 p-4">
+                  {navItems.map((item) => (
+                    <DialogClose key={item.href} asChild>
+                      <Button
+                        asChild
+                        variant={pathname === item.href ? "secondary" : "ghost"}
+                        className={cn(
+                          "h-11 justify-start px-3 text-sm",
+                          pathname === item.href && "font-semibold",
+                        )}
+                      >
+                        <Link href={item.href} aria-current={pathname === item.href ? "page" : undefined}>{item.label}</Link>
+                      </Button>
+                    </DialogClose>
+                  ))}
+                </nav>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </header>
       <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10">

@@ -66,11 +66,7 @@ export function itemCardClassName(
   item: InventoryItem,
   expiringSoon: boolean,
 ) {
-  if (expiringSoon) {
-    return "bg-destructive/5 ring-destructive/20";
-  }
-
-  if (item.status === "unavailable") {
+  if (expiringSoon || item.status === "unavailable") {
     return "bg-destructive/5 ring-destructive/20";
   }
 

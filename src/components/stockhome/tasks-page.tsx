@@ -28,6 +28,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/lib/supabase";
+import { loadAllPages } from "@/lib/pagination";
 import type { Task } from "@/types";
 
 type TaskForm = {
@@ -231,17 +232,17 @@ export function TasksPageClient() {
       setUser(authData.user);
       checkingSession = false;
       failureMessage = "We couldn't load your tasks. Please try again.";
-      const { data, error: requestError } = await supabase
+      const data = await loadAllPages<Task>((from, to) => supabase
         .from("tasks")
-        .select("*")
+        .select("*", { count: from === 0 ? "exact" : undefined })
         .eq("user_id", authData.user.id)
         .order("is_done", { ascending: true })
         .order("due_date", { ascending: true, nullsFirst: false })
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true }).range(from, to));
       if (!isCurrent()) return;
-      if (requestError) throw requestError;
       rememberListFocus();
-      setTasks((data ?? []) as Task[]);
+      setTasks(data);
       setHasLoaded(true);
     } catch (error) {
       if (!isCurrent()) return;
