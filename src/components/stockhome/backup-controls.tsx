@@ -8,6 +8,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { MAX_BACKUP_BYTES, parseBackup, validateBackup, type Backup } from "@/lib/backup";
 import { supabase } from "@/lib/supabase";
 
+// Only messages authored here or by the local backup validator may reach the UI.
+class BackupFeedback extends Error {}
+
 export function BackupControls() {
   const input = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<{ backup: Backup; userId: string } | null>(null);
@@ -18,38 +21,44 @@ export function BackupControls() {
 
   async function currentUser() {
     const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) throw new Error("Sign in to export or import your data.");
+    if (error || !data.user) throw new BackupFeedback("Sign in to export or import your data.");
     return data.user;
   }
-  function report(error: unknown) {
-    setError(error instanceof Error ? error.message : "The operation failed. Please try again.");
+  function report(error: unknown, fallback: string) {
+    setError(error instanceof BackupFeedback ? error.message : fallback);
   }
   async function exportData() {
     setBusy(true); setError(null); setMessage(null);
     try {
       await currentUser();
       const { data, error } = await supabase.rpc("export_stockhome_backup");
-      if (error) throw new Error(error.message);
+      if (error) throw error;
       const backup = validateBackup(data);
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
-      if (blob.size > MAX_BACKUP_BYTES) throw new Error("Your data exceeds the 10 MB backup limit.");
+      if (blob.size > MAX_BACKUP_BYTES) throw new BackupFeedback("Your data exceeds the 10 MB backup limit.");
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url; link.download = `stockhome-backup-${new Date().toISOString().slice(0, 10)}.json`;
       document.body.appendChild(link); link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       setMessage("Backup downloaded. Store it somewhere private; it contains your household data.");
-    } catch (error) { report(error); } finally { setBusy(false); }
+    } catch (error) { report(error, "We couldn't export your backup. Please try again."); } finally { setBusy(false); }
   }
   async function selectFile(file?: File) {
     if (!file) return;
     setBusy(true); setError(null); setMessage(null); setPending(null);
     try {
-      if (file.size > MAX_BACKUP_BYTES) throw new Error("Backup files must be 10 MB or smaller.");
+      if (file.size > MAX_BACKUP_BYTES) throw new BackupFeedback("Backup files must be 10 MB or smaller.");
       const user = await currentUser();
-      const backup = parseBackup(await file.text());
+      const text = await file.text();
+      let backup: Backup;
+      try {
+        backup = parseBackup(text);
+      } catch (error) {
+        throw new BackupFeedback(error instanceof Error ? error.message : "Choose a valid StockHome backup.");
+      }
       setReplace(false); setPending({ backup, userId: user.id });
-    } catch (error) { report(error); } finally {
+    } catch (error) { report(error, "We couldn't read your backup. Please select the file again."); } finally {
       setBusy(false);
       if (input.current) input.current.value = "";
     }
@@ -59,15 +68,15 @@ export function BackupControls() {
     setBusy(true); setError(null); setMessage(null);
     try {
       const user = await currentUser();
-      if (user.id !== pending.userId) throw new Error("Your account changed. Select the backup again.");
+      if (user.id !== pending.userId) throw new BackupFeedback("Your account changed. Select the backup again.");
       const { error } = await supabase.rpc("import_stockhome_backup", { backup: pending.backup, replace_existing: replace });
       if (error) {
-        if (error.code === "23505") throw new Error("Import cancelled: a grocery name already exists. No data was changed. Use a different backup or choose replace.");
-        throw new Error(`Import could not be confirmed. Refresh your data before retrying. ${error.message}`);
+        if (error.code === "23505") throw new BackupFeedback("Import cancelled: a grocery name already exists. No data was changed. Use a different backup or choose replace.");
+        throw error;
       }
       setPending(null);
       setMessage("Import complete. Your inventory, grocery list, and tasks are saved.");
-    } catch (error) { report(error); } finally { setBusy(false); }
+    } catch (error) { report(error, "Import could not be confirmed. Refresh your data before retrying."); } finally { setBusy(false); }
   }
   return (
     <div className="grid gap-3">

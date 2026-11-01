@@ -58,6 +58,24 @@ test("does not read tables without a signed-in account", async () => {
   expect(from).not.toHaveBeenCalled();
 });
 
+test.each(["returned", "thrown"])("hides %s database details in dashboard errors", async (mode) => {
+  const internal = "permission denied for private_inventory_table";
+  if (mode === "returned") range.mockResolvedValue({ data: null, error: { message: internal } });
+  else range.mockRejectedValue(new Error(internal));
+  render(<Dashboard />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("Inventory could not load. Please refresh to try again.");
+  expect(document.body).not.toHaveTextContent(internal);
+  expect(screen.getByRole("button", { name: "Refresh dashboard" })).toBeEnabled();
+});
+
+test("hides unexpected session exceptions", async () => {
+  getUser.mockRejectedValue(new Error("internal auth implementation details"));
+  render(<Dashboard />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("Unable to check your session");
+  expect(document.body).not.toHaveTextContent("internal auth implementation details");
+  expect(from).not.toHaveBeenCalled();
+});
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((done) => { resolve = done; });

@@ -17,6 +17,33 @@ function selectFile(content: string) {
   fireEvent.change(screen.getByLabelText("Choose StockHome backup"), { target: { files: [file] } });
 }
 
+test.each(["returned", "thrown"])("hides %s export errors and allows retry", async (mode) => {
+  const user = userEvent.setup();
+  const internal = "permission denied for private_backup_table";
+  if (mode === "returned") rpc.mockResolvedValue({ data: null, error: { message: internal } });
+  else rpc.mockRejectedValue(new Error(internal));
+  render(<BackupControls />);
+  await user.click(screen.getByRole("button", { name: "Export backup" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't export your backup. Please try again.");
+  expect(document.body).not.toHaveTextContent(internal);
+  expect(screen.getByRole("button", { name: "Export backup" })).toBeEnabled();
+});
+
+test.each(["returned", "thrown"])("hides %s import errors and preserves the preview", async (mode) => {
+  const user = userEvent.setup();
+  const internal = "SQL failure in private_backup_function";
+  if (mode === "returned") rpc.mockResolvedValue({ data: null, error: { message: internal } });
+  else rpc.mockRejectedValue(new Error(internal));
+  render(<BackupControls />);
+  selectFile(JSON.stringify(backup));
+  await screen.findByRole("dialog");
+  await user.click(screen.getByRole("button", { name: "Add records" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Import could not be confirmed. Refresh your data before retrying.");
+  expect(screen.getByRole("dialog")).toHaveTextContent("0 inventory items");
+  expect(document.body).not.toHaveTextContent(internal);
+  expect(screen.queryByText(/Import complete/)).not.toBeInTheDocument();
+});
+
 test("previews a backup without writing and requires confirmation for replacement", async () => {
   const user = userEvent.setup();
   render(<BackupControls />);

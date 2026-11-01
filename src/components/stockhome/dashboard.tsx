@@ -22,7 +22,7 @@ async function loadRows<T>(table: "tasks" | "inventory_items" | "grocery_items",
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase.from(table).select("*").eq("user_id", userId)
       .order("id", { ascending: true }).range(offset, offset + pageSize - 1);
-    if (error) throw new Error(error.message);
+    if (error) throw error;
     rows.push(...(data ?? []) as T[]);
     if (!data || data.length < pageSize) return rows;
   }
@@ -52,6 +52,7 @@ export function Dashboard() {
     async function loadDashboard() {
       setIsLoading(true);
       setErrors([]);
+      let failureMessage = "Unable to check your session. Please try refreshing again.";
       try {
         const { data, error } = await supabase.auth.getUser();
         if (!active) return;
@@ -64,7 +65,8 @@ export function Dashboard() {
           setTasks(null); setItems(null); setGroceries(null);
           setUpdatedAt(null);
           ownerId.current = null;
-          throw new Error("Sign in to view your dashboard.");
+          failureMessage = "Sign in to view your dashboard.";
+          throw new Error(failureMessage);
         }
         // Retained data belongs only to the account that loaded it.
         if (ownerId.current !== null && ownerId.current !== data.user.id) {
@@ -73,6 +75,7 @@ export function Dashboard() {
           setHasLoaded(false);
         }
         ownerId.current = data.user.id;
+        failureMessage = "Unable to load dashboard. Please try refreshing again.";
         const results = await Promise.allSettled([
           loadRows<Task>("tasks", data.user.id),
           loadRows<InventoryItem>("inventory_items", data.user.id),
@@ -84,14 +87,14 @@ export function Dashboard() {
         if (stockResult.status === "fulfilled") setItems(stockResult.value);
         if (groceryResult.status === "fulfilled") setGroceries(groceryResult.value);
         const labels = ["Tasks", "Inventory", "Groceries"];
-        setErrors(results.flatMap((result, index) => result.status === "rejected" ? [`${labels[index]} could not load: ${result.reason instanceof Error ? result.reason.message : "Please try again."}`] : []));
+        setErrors(results.flatMap((result, index) => result.status === "rejected" ? [`${labels[index]} could not load. Please refresh to try again.`] : []));
         const completedAt = new Date();
         setCheckedAt(completedAt);
         // A partial refresh must not label retained data as newly updated.
         if (results.every((result) => result.status === "fulfilled")) setUpdatedAt(completedAt);
-      } catch (error) {
+      } catch {
         if (!active) return;
-        setErrors([error instanceof Error ? error.message : "Unable to load dashboard."]);
+        setErrors([failureMessage]);
       } finally {
         if (active) {
           setIsLoading(false);
